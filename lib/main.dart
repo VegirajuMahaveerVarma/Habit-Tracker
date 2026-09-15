@@ -136,6 +136,112 @@ class _AppShellState extends State<AppShell> {
     controller.dispose();
   }
 
+  Future<void> _editHabit(Habit habit) async {
+    final nameController = TextEditingController(text: habit.name);
+    var category = habit.category;
+    var goal = habit.goal.clamp(1, 31).toInt();
+    var deleteRequested = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 18, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(child: Text('Edit habit', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800))),
+                    IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Habit name', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: ['Daily', 'Mind & Body', 'Productivity', 'Goals'].contains(category) ? category : 'Daily',
+                  decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+                  items: const ['Daily', 'Mind & Body', 'Productivity', 'Goals']
+                      .map((value) => DropdownMenuItem(value: value, child: Text(value)))
+                      .toList(),
+                  onChanged: (value) => setSheetState(() => category = value ?? category),
+                ),
+                const SizedBox(height: 8),
+                Text('Monthly goal: $goal days', style: const TextStyle(fontWeight: FontWeight.w700)),
+                Slider(
+                  value: goal.toDouble(),
+                  min: 1,
+                  max: 31,
+                  divisions: 30,
+                  label: '$goal',
+                  onChanged: (value) => setSheetState(() => goal = value.round()),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          deleteRequested = true;
+                          Navigator.pop(sheetContext);
+                        },
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Delete'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () async {
+                          final name = nameController.text.trim();
+                          if (name.isEmpty) return;
+                          habit.name = name;
+                          habit.category = category;
+                          habit.goal = goal;
+                          await storage.saveHabits(habits);
+                          if (sheetContext.mounted) Navigator.pop(sheetContext);
+                          if (mounted) setState(() {});
+                        },
+                        child: const Text('Save changes'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    if (deleteRequested && mounted) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete habit?'),
+          content: Text('Remove "${habit.name}" from your habits?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Delete')),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        setState(() => habits.removeWhere((item) => item.id == habit.id));
+        await storage.saveHabits(habits);
+      }
+    }
+
+    nameController.dispose();
+  }
+
   Future<void> _addTodo() async {
     final controller = TextEditingController();
     await showDialog<void>(
@@ -168,13 +274,14 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
-      DashboardPage(habits: habits, date: selectedDate, onToggle: _toggle, onAdd: _addHabit),
+      DashboardPage(habits: habits, date: selectedDate, onToggle: _toggle, onAdd: _addHabit, onEdit: _editHabit),
       DailyPage(
         habits: habits,
         date: selectedDate,
         onDateChanged: (date) => setState(() => selectedDate = date),
         onToggle: _toggle,
         onAdd: _addHabit,
+        onEdit: _editHabit,
       ),
       AnalyticsPage(habits: habits),
       TodoPage(todos: todos, onAdd: _addTodo, onChanged: () => storage.saveTodos(todos)),
@@ -232,8 +339,9 @@ class DashboardPage extends StatelessWidget {
   final DateTime date;
   final Future<void> Function(Habit) onToggle;
   final VoidCallback onAdd;
+  final Future<void> Function(Habit) onEdit;
 
-  const DashboardPage({super.key, required this.habits, required this.date, required this.onToggle, required this.onAdd});
+  const DashboardPage({super.key, required this.habits, required this.date, required this.onToggle, required this.onAdd, required this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -243,13 +351,22 @@ class DashboardPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          PageHeader(
-            title: 'Good day 👋',
-            subtitle: DateFormat('EEEE, d MMMM').format(date),
-            trailing: CircleAvatar(
-              backgroundColor: AppColors.navy,
-              child: Text('${(progress * 100).round()}%', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-            ),
+          Stack(
+            children: [
+              const SizedBox(height: 112),
+              PageHeader(title: 'Good day 👋', subtitle: DateFormat('EEEE, d MMMM').format(date)),
+              Positioned(
+                top: 18,
+                right: 20,
+                child: Container(
+                  width: 70,
+                  height: 70,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(color: AppColors.navy, shape: BoxShape.circle),
+                  child: Text('${(progress * 100).round()}%', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+                ),
+              ),
+            ],
           ),
           Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: ProgressCard(progress: progress, done: done, total: habits.length)),
           const SizedBox(height: 20),
@@ -262,7 +379,7 @@ class DashboardPage extends StatelessWidget {
               ],
             ),
           ),
-          ...habits.map((habit) => HabitTile(habit: habit, date: date, onToggle: () => onToggle(habit))),
+          ...habits.map((habit) => HabitTile(habit: habit, date: date, onToggle: () => onToggle(habit), onEdit: () => onEdit(habit))),
           const SizedBox(height: 20),
         ],
       ),
@@ -294,7 +411,7 @@ class ProgressCard extends StatelessWidget {
               alignment: Alignment.center,
               children: [
                 CircularProgressIndicator(value: progress, strokeWidth: 9, backgroundColor: Colors.white24, color: Colors.white),
-                Text('${(progress * 100).round()}%', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+                Text('$done/$total', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
               ],
             ),
           ),
@@ -320,8 +437,9 @@ class HabitTile extends StatelessWidget {
   final Habit habit;
   final DateTime date;
   final VoidCallback onToggle;
+  final VoidCallback onEdit;
 
-  const HabitTile({super.key, required this.habit, required this.date, required this.onToggle});
+  const HabitTile({super.key, required this.habit, required this.date, required this.onToggle, required this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -333,6 +451,7 @@ class HabitTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(17),
         child: InkWell(
           onTap: onToggle,
+          onLongPress: onEdit,
           borderRadius: BorderRadius.circular(17),
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -374,8 +493,9 @@ class DailyPage extends StatelessWidget {
   final ValueChanged<DateTime> onDateChanged;
   final Future<void> Function(Habit) onToggle;
   final VoidCallback onAdd;
+  final Future<void> Function(Habit) onEdit;
 
-  const DailyPage({super.key, required this.habits, required this.date, required this.onDateChanged, required this.onToggle, required this.onAdd});
+  const DailyPage({super.key, required this.habits, required this.date, required this.onDateChanged, required this.onToggle, required this.onAdd, required this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -422,7 +542,7 @@ class DailyPage extends StatelessWidget {
         Expanded(
           child: ListView(
             padding: const EdgeInsets.only(bottom: 20),
-            children: habits.map((habit) => HabitTile(habit: habit, date: date, onToggle: () => onToggle(habit))).toList(),
+            children: habits.map((habit) => HabitTile(habit: habit, date: date, onToggle: () => onToggle(habit), onEdit: () => onEdit(habit))).toList(),
           ),
         ),
       ],
