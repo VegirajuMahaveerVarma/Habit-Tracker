@@ -1,6 +1,6 @@
 class Habit {
   final String id;
-  String name;
+  String _name;
   String category;
   int goal;
   bool active;
@@ -8,12 +8,24 @@ class Habit {
 
   Habit({
     required this.id,
-    required this.name,
+    required String name,
     this.category = 'Daily',
     this.goal = 30,
     this.active = true,
     Map<String, bool>? completions,
-  }) : completions = completions ?? {};
+  })  : _name = name,
+        completions = completions ?? {};
+
+  String get name {
+    final streak = currentStreak();
+    if (streak <= 0) return _name;
+    final unit = streak == 1 ? 'day' : 'days';
+    return '$_name  🔥 $streak $unit';
+  }
+
+  set name(String value) {
+    _name = value.replaceFirst(RegExp(r'\s+🔥\s+\d+\s+(?:day|days)\$'), '');
+  }
 
   int completedInMonth(DateTime month) {
     var count = 0;
@@ -28,6 +40,10 @@ class Habit {
 
   int currentStreak([DateTime? from]) {
     var day = _dateOnly(from ?? DateTime.now());
+    if (!isDone(day)) {
+      day = day.subtract(const Duration(days: 1));
+    }
+
     var streak = 0;
     while (isDone(day)) {
       streak++;
@@ -57,7 +73,7 @@ class Habit {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'name': name,
+        'name': _name,
         'category': category,
         'goal': goal,
         'active': active,
