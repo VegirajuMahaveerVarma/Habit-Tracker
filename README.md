@@ -10,6 +10,7 @@ A polished, offline-first Flutter habit tracker built from the reference require
 - To-Do list with progress and swipe-to-delete
 - Profile/settings overview
 - Local persistence using SharedPreferences
+- **Offline daily habit reminders with local notifications**
 - No paid API, AI API, or cloud backend required
 
 ## Run
@@ -24,9 +25,13 @@ flutter run
 
 The `flutter create` command is safe for an empty repository and generates the Android project files locally. The CI workflow does the same on GitHub before analysis and tests.
 
+## Reminders
+
+The reminder engine uses `flutter_local_notifications` and the `timezone` package. Reminders are scheduled locally on the device, so they do not require an account, server, Firebase project, or internet connection.
+
 ## Product direction
 
-The app uses the supplied screenshots as the feature and visual reference: daily tracking, weekly/monthly progress, goals, analytics, and a To-Do bonus. Implementation and branding are original.
+The app uses the supplied screenshots as the feature and visual reference: daily tracking, weekly/monthly progress, goals, analytics, reminders, and a To-Do bonus. Implementation and branding are original.
 
 ## Cost
 
