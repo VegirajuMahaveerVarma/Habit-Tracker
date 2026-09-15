@@ -15,6 +15,7 @@ class AppColors {
 
 class HabitTrackerApp extends StatelessWidget {
   const HabitTrackerApp({super.key});
+
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Habit Tracker',
@@ -30,6 +31,7 @@ class HabitTrackerApp extends StatelessWidget {
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
+
   @override
   State<AppShell> createState() => _AppShellState();
 }
@@ -71,12 +73,14 @@ class _AppShellState extends State<AppShell> {
     if (!mounted || result == null || result.delete) return;
     final name = result.name.trim();
     if (name.isEmpty) return;
-    setState(() => habits.add(Habit(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          name: name,
-          category: result.category,
-          goal: result.goal,
-        )));
+    setState(() {
+      habits.add(Habit(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: name,
+        category: result.category,
+        goal: result.goal,
+      ));
+    });
     await storage.saveHabits(habits);
   }
 
@@ -123,43 +127,13 @@ class _AppShellState extends State<AppShell> {
     await storage.saveHabits(habits);
   }
 
-  // The dialog only returns the new task. The parent list is changed after
-  // the dialog route has completely closed, avoiding the same deactivation
-  // lifecycle assertion that affected the edit-habit sheet.
   Future<void> _addTodo() async {
-    final controller = TextEditingController();
+    // The dialog owns its controller and returns only the entered value.
+    // The parent list is updated after the dialog route has fully closed.
     final title = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Add task'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (value) {
-            final text = value.trim();
-            if (text.isNotEmpty) Navigator.pop(dialogContext, text);
-          },
-          decoration: const InputDecoration(
-            hintText: 'What needs to be done?',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final text = controller.text.trim();
-              if (text.isNotEmpty) Navigator.pop(dialogContext, text);
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
+      builder: (_) => const AddTodoDialog(),
     );
-    controller.dispose();
 
     if (!mounted || title == null || title.isEmpty) return;
     setState(() => todos.add({'title': title, 'done': false}));
@@ -194,7 +168,7 @@ class _AppShellState extends State<AppShell> {
     ];
 
     return Scaffold(
-      body: SafeArea(child: pages[tab]),
+      body: SafeArea(child: IndexedStack(index: tab, children: pages)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: tab,
         onDestinationSelected: (index) => setState(() => tab = index),
@@ -230,11 +204,65 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
+class AddTodoDialog extends StatefulWidget {
+  const AddTodoDialog({super.key});
+
+  @override
+  State<AddTodoDialog> createState() => _AddTodoDialogState();
+}
+
+class _AddTodoDialogState extends State<AddTodoDialog> {
+  late final TextEditingController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = controller.text.trim();
+    if (text.isEmpty) return;
+    Navigator.of(context).pop(text);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Add task'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submit(),
+          decoration: const InputDecoration(
+            hintText: 'What needs to be done?',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: _submit,
+            child: const Text('Add'),
+          ),
+        ],
+      );
+}
+
 class HabitEditResult {
   final String name;
   final String category;
   final int goal;
   final bool delete;
+
   const HabitEditResult({
     this.name = '',
     this.category = 'Daily',
@@ -245,7 +273,9 @@ class HabitEditResult {
 
 class HabitEditorSheet extends StatefulWidget {
   final Habit? habit;
+
   const HabitEditorSheet({super.key, this.habit});
+
   @override
   State<HabitEditorSheet> createState() => _HabitEditorSheetState();
 }
@@ -372,9 +402,7 @@ class _HabitEditorSheetState extends State<HabitEditorSheet> {
                   Expanded(
                     child: FilledButton(
                       onPressed: _save,
-                      child: Text(
-                        editing ? 'Save changes' : 'Create habit',
-                      ),
+                      child: Text(editing ? 'Save changes' : 'Create habit'),
                     ),
                   ),
                 ],
@@ -391,12 +419,14 @@ class PageHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? trailing;
+
   const PageHeader({
     super.key,
     required this.title,
     this.subtitle,
     this.trailing,
   });
+
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
@@ -434,6 +464,7 @@ class DashboardPage extends StatelessWidget {
   final Future<void> Function(Habit) onToggle;
   final VoidCallback onAdd;
   final Future<void> Function(Habit) onEdit;
+
   const DashboardPage({
     super.key,
     required this.habits,
@@ -442,6 +473,7 @@ class DashboardPage extends StatelessWidget {
     required this.onAdd,
     required this.onEdit,
   });
+
   @override
   Widget build(BuildContext context) {
     final done = habits.where((habit) => habit.isDone(date)).length;
@@ -524,12 +556,14 @@ class ProgressCard extends StatelessWidget {
   final double progress;
   final int done;
   final int total;
+
   const ProgressCard({
     super.key,
     required this.progress,
     required this.done,
     required this.total,
   });
+
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(22),
@@ -604,6 +638,7 @@ class HabitTile extends StatelessWidget {
   final DateTime date;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
+
   const HabitTile({
     super.key,
     required this.habit,
@@ -611,6 +646,7 @@ class HabitTile extends StatelessWidget {
     required this.onToggle,
     required this.onEdit,
   });
+
   @override
   Widget build(BuildContext context) {
     final done = habit.isDone(date);
@@ -634,9 +670,7 @@ class HabitTile extends StatelessWidget {
                     color: done ? AppColors.blue : Colors.white,
                     borderRadius: BorderRadius.circular(9),
                     border: Border.all(
-                      color: done
-                          ? AppColors.blue
-                          : const Color(0xFFD0D5DD),
+                      color: done ? AppColors.blue : const Color(0xFFD0D5DD),
                       width: 2,
                     ),
                   ),
@@ -653,8 +687,7 @@ class HabitTile extends StatelessWidget {
                         habit.name,
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          decoration:
-                              done ? TextDecoration.lineThrough : null,
+                          decoration: done ? TextDecoration.lineThrough : null,
                         ),
                       ),
                       Text(
@@ -690,6 +723,7 @@ class DailyPage extends StatelessWidget {
   final Future<void> Function(Habit) onToggle;
   final VoidCallback onAdd;
   final Future<void> Function(Habit) onEdit;
+
   const DailyPage({
     super.key,
     required this.habits,
@@ -699,6 +733,7 @@ class DailyPage extends StatelessWidget {
     required this.onAdd,
     required this.onEdit,
   });
+
   @override
   Widget build(BuildContext context) {
     final days = List.generate(
@@ -749,9 +784,7 @@ class DailyPage extends StatelessWidget {
                         DateFormat('EEE').format(day).substring(0, 2),
                         style: TextStyle(
                           fontSize: 11,
-                          color: selected
-                              ? Colors.white70
-                              : AppColors.muted,
+                          color: selected ? Colors.white70 : AppColors.muted,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -791,9 +824,12 @@ class DailyPage extends StatelessWidget {
 
 class AnalyticsPage extends StatelessWidget {
   final List<Habit> habits;
+
   const AnalyticsPage({super.key, required this.habits});
+
   int doneOn(DateTime date) =>
       habits.where((habit) => habit.isDone(date)).length;
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -805,7 +841,9 @@ class AnalyticsPage extends StatelessWidget {
     for (final day in days) total += doneOn(day);
     final percent = habits.isEmpty ? 0.0 : total / (habits.length * 7);
     final top = [...habits]
-      ..sort((a, b) => b.completedInMonth(now).compareTo(a.completedInMonth(now)));
+      ..sort((a, b) =>
+          b.completedInMonth(now).compareTo(a.completedInMonth(now)));
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -935,12 +973,14 @@ class StatCard extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
+
   const StatCard({
     super.key,
     required this.label,
     required this.value,
     required this.icon,
   });
+
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(17),
@@ -967,12 +1007,14 @@ class TodoPage extends StatefulWidget {
   final List<Map<String, dynamic>> todos;
   final VoidCallback onAdd;
   final Future<void> Function() onChanged;
+
   const TodoPage({
     super.key,
     required this.todos,
     required this.onAdd,
     required this.onChanged,
   });
+
   @override
   State<TodoPage> createState() => _TodoPageState();
 }
@@ -981,7 +1023,9 @@ class _TodoPageState extends State<TodoPage> {
   @override
   Widget build(BuildContext context) {
     final completed = widget.todos.where((todo) => todo['done'] == true).length;
-    final progress = widget.todos.isEmpty ? 0.0 : completed / widget.todos.length;
+    final progress =
+        widget.todos.isEmpty ? 0.0 : completed / widget.todos.length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1087,9 +1131,8 @@ class _TodoPageState extends State<TodoPage> {
                           title: Text(
                             todo['title'] as String,
                             style: TextStyle(
-                              decoration: done
-                                  ? TextDecoration.lineThrough
-                                  : null,
+                              decoration:
+                                  done ? TextDecoration.lineThrough : null,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1106,7 +1149,9 @@ class _TodoPageState extends State<TodoPage> {
 
 class ProfilePage extends StatelessWidget {
   final List<Habit> habits;
+
   const ProfilePage({super.key, required this.habits});
+
   @override
   Widget build(BuildContext context) {
     final totalCompleted = habits.fold<int>(
