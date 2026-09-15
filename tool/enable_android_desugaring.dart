@@ -23,7 +23,7 @@ void main() {
   }
 
   if (!text.contains('coreLibraryDesugaring(')) {
-    final marker = 'dependencies {\n';
+    const marker = 'dependencies {\n';
     final index = text.indexOf(marker);
     if (index < 0) {
       stderr.writeln('Could not find dependencies in android/app/build.gradle.kts');
