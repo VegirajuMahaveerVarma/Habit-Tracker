@@ -15,25 +15,21 @@ class AppColors {
 
 class HabitTrackerApp extends StatelessWidget {
   const HabitTrackerApp({super.key});
-
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Habit Tracker',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: AppColors.bg,
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.blue),
-      ),
-      home: const AppShell(),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'Habit Tracker',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          scaffoldBackgroundColor: AppColors.bg,
+          colorScheme: ColorScheme.fromSeed(seedColor: AppColors.blue),
+        ),
+        home: const AppShell(),
+      );
 }
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
-
   @override
   State<AppShell> createState() => _AppShellState();
 }
@@ -75,13 +71,12 @@ class _AppShellState extends State<AppShell> {
     if (!mounted || result == null || result.delete) return;
     final name = result.name.trim();
     if (name.isEmpty) return;
-    final habit = Habit(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: name,
-      category: result.category,
-      goal: result.goal,
-    );
-    setState(() => habits.add(habit));
+    setState(() => habits.add(Habit(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          name: name,
+          category: result.category,
+          goal: result.goal,
+        )));
     await storage.saveHabits(habits);
   }
 
@@ -91,10 +86,6 @@ class _AppShellState extends State<AppShell> {
       isScrollControlled: true,
       builder: (_) => HabitEditorSheet(habit: habit),
     );
-
-    // Important: the modal returns its data first. The parent is updated only
-    // after the route has finished closing, avoiding the Flutter
-    // '_dependents.isEmpty' deactivation assertion seen during Save.
     if (!mounted || result == null) return;
 
     if (result.delete) {
@@ -124,7 +115,6 @@ class _AppShellState extends State<AppShell> {
 
     final name = result.name.trim();
     if (name.isEmpty) return;
-
     habit.name = name;
     habit.category = result.category;
     habit.goal = result.goal;
@@ -133,16 +123,26 @@ class _AppShellState extends State<AppShell> {
     await storage.saveHabits(habits);
   }
 
+  // The dialog only returns the new task. The parent list is changed after
+  // the dialog route has completely closed, avoiding the same deactivation
+  // lifecycle assertion that affected the edit-habit sheet.
   Future<void> _addTodo() async {
     final controller = TextEditingController();
-    await showDialog<void>(
+    final title = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Add task'),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'What needs to be done?'),
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) {
+            final text = value.trim();
+            if (text.isNotEmpty) Navigator.pop(dialogContext, text);
+          },
+          decoration: const InputDecoration(
+            hintText: 'What needs to be done?',
+          ),
         ),
         actions: [
           TextButton(
@@ -150,12 +150,9 @@ class _AppShellState extends State<AppShell> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () async {
-              final title = controller.text.trim();
-              if (title.isEmpty) return;
-              setState(() => todos.add({'title': title, 'done': false}));
-              await storage.saveTodos(todos);
-              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) Navigator.pop(dialogContext, text);
             },
             child: const Text('Add'),
           ),
@@ -163,6 +160,10 @@ class _AppShellState extends State<AppShell> {
       ),
     );
     controller.dispose();
+
+    if (!mounted || title == null || title.isEmpty) return;
+    setState(() => todos.add({'title': title, 'done': false}));
+    await storage.saveTodos(todos);
   }
 
   @override
@@ -234,7 +235,6 @@ class HabitEditResult {
   final String category;
   final int goal;
   final bool delete;
-
   const HabitEditResult({
     this.name = '',
     this.category = 'Daily',
@@ -245,9 +245,7 @@ class HabitEditResult {
 
 class HabitEditorSheet extends StatefulWidget {
   final Habit? habit;
-
   const HabitEditorSheet({super.key, this.habit});
-
   @override
   State<HabitEditorSheet> createState() => _HabitEditorSheetState();
 }
@@ -256,13 +254,7 @@ class _HabitEditorSheetState extends State<HabitEditorSheet> {
   late final TextEditingController nameController;
   late String category;
   late double goal;
-
-  static const categories = [
-    'Daily',
-    'Mind & Body',
-    'Productivity',
-    'Goals',
-  ];
+  static const categories = ['Daily', 'Mind & Body', 'Productivity', 'Goals'];
 
   @override
   void initState() {
@@ -283,24 +275,21 @@ class _HabitEditorSheetState extends State<HabitEditorSheet> {
   void _save() {
     final name = nameController.text.trim();
     if (name.isEmpty) return;
-    Navigator.of(context).pop(
-      HabitEditResult(
-        name: name,
-        category: category,
-        goal: goal.round(),
-      ),
-    );
+    Navigator.of(context).pop(HabitEditResult(
+      name: name,
+      category: category,
+      goal: goal.round(),
+    ));
   }
 
-  void _delete() {
-    Navigator.of(context).pop(const HabitEditResult(delete: true));
-  }
+  void _delete() => Navigator.of(context).pop(
+        const HabitEditResult(delete: true),
+      );
 
   @override
   Widget build(BuildContext context) {
     final editing = widget.habit != null;
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
-
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.fromLTRB(20, 18, 20, bottom + 20),
@@ -345,12 +334,10 @@ class _HabitEditorSheetState extends State<HabitEditorSheet> {
                   border: OutlineInputBorder(),
                 ),
                 items: categories
-                    .map(
-                      (value) => DropdownMenuItem(
-                        value: value,
-                        child: Text(value),
-                      ),
-                    )
+                    .map((value) => DropdownMenuItem(
+                          value: value,
+                          child: Text(value),
+                        ))
                     .toList(),
                 onChanged: (value) {
                   if (value != null) setState(() => category = value);
@@ -385,7 +372,9 @@ class _HabitEditorSheetState extends State<HabitEditorSheet> {
                   Expanded(
                     child: FilledButton(
                       onPressed: _save,
-                      child: Text(editing ? 'Save changes' : 'Create habit'),
+                      child: Text(
+                        editing ? 'Save changes' : 'Create habit',
+                      ),
                     ),
                   ),
                 ],
@@ -402,45 +391,41 @@ class PageHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? trailing;
-
   const PageHeader({
     super.key,
     required this.title,
     this.subtitle,
     this.trailing,
   });
-
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.text,
-                  ),
-                ),
-                if (subtitle != null)
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    subtitle!,
-                    style: const TextStyle(color: AppColors.muted),
+                    title,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.text,
+                    ),
                   ),
-              ],
+                  if (subtitle != null)
+                    Text(
+                      subtitle!,
+                      style: const TextStyle(color: AppColors.muted),
+                    ),
+                ],
+              ),
             ),
-          ),
-          if (trailing != null) trailing!,
-        ],
-      ),
-    );
-  }
+            if (trailing != null) trailing!,
+          ],
+        ),
+      );
 }
 
 class DashboardPage extends StatelessWidget {
@@ -449,7 +434,6 @@ class DashboardPage extends StatelessWidget {
   final Future<void> Function(Habit) onToggle;
   final VoidCallback onAdd;
   final Future<void> Function(Habit) onEdit;
-
   const DashboardPage({
     super.key,
     required this.habits,
@@ -458,12 +442,10 @@ class DashboardPage extends StatelessWidget {
     required this.onAdd,
     required this.onEdit,
   });
-
   @override
   Widget build(BuildContext context) {
     final done = habits.where((habit) => habit.isDone(date)).length;
     final progress = habits.isEmpty ? 0.0 : done / habits.length;
-
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -525,14 +507,12 @@ class DashboardPage extends StatelessWidget {
               ],
             ),
           ),
-          ...habits.map(
-            (habit) => HabitTile(
-              habit: habit,
-              date: date,
-              onToggle: () => onToggle(habit),
-              onEdit: () => onEdit(habit),
-            ),
-          ),
+          ...habits.map((habit) => HabitTile(
+                habit: habit,
+                date: date,
+                onToggle: () => onToggle(habit),
+                onEdit: () => onEdit(habit),
+              )),
           const SizedBox(height: 20),
         ],
       ),
@@ -544,83 +524,79 @@ class ProgressCard extends StatelessWidget {
   final double progress;
   final int done;
   final int total;
-
   const ProgressCard({
     super.key,
     required this.progress,
     required this.done,
     required this.total,
   });
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.navy, AppColors.blue],
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.navy, AppColors.blue],
+          ),
+          borderRadius: BorderRadius.circular(26),
         ),
-        borderRadius: BorderRadius.circular(26),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 94,
-            height: 94,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 9,
-                  backgroundColor: Colors.white24,
-                  color: Colors.white,
-                ),
-                Text(
-                  '$done/$total',
-                  style: const TextStyle(
+        child: Row(
+          children: [
+            SizedBox(
+              width: 94,
+              height: 94,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 9,
+                    backgroundColor: Colors.white24,
                     color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
                   ),
-                ),
-              ],
+                  Text(
+                    '$done/$total',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'DAILY PROGRESS',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'DAILY PROGRESS',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '$done / $total completed',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                  const SizedBox(height: 8),
+                  Text(
+                    '$done / $total completed',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-                const Text(
-                  'Small wins build consistency.',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ],
+                  const Text(
+                    'Small wins build consistency.',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
 }
 
 class HabitTile extends StatelessWidget {
@@ -628,7 +604,6 @@ class HabitTile extends StatelessWidget {
   final DateTime date;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
-
   const HabitTile({
     super.key,
     required this.habit,
@@ -636,7 +611,6 @@ class HabitTile extends StatelessWidget {
     required this.onToggle,
     required this.onEdit,
   });
-
   @override
   Widget build(BuildContext context) {
     final done = habit.isDone(date);
@@ -716,7 +690,6 @@ class DailyPage extends StatelessWidget {
   final Future<void> Function(Habit) onToggle;
   final VoidCallback onAdd;
   final Future<void> Function(Habit) onEdit;
-
   const DailyPage({
     super.key,
     required this.habits,
@@ -726,14 +699,12 @@ class DailyPage extends StatelessWidget {
     required this.onAdd,
     required this.onEdit,
   });
-
   @override
   Widget build(BuildContext context) {
     final days = List.generate(
       DateTime(date.year, date.month + 1, 0).day,
       (i) => DateTime(date.year, date.month, i + 1),
     );
-
     return Column(
       children: [
         PageHeader(
@@ -804,14 +775,12 @@ class DailyPage extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.only(bottom: 20),
             children: habits
-                .map(
-                  (habit) => HabitTile(
-                    habit: habit,
-                    date: date,
-                    onToggle: () => onToggle(habit),
-                    onEdit: () => onEdit(habit),
-                  ),
-                )
+                .map((habit) => HabitTile(
+                      habit: habit,
+                      date: date,
+                      onToggle: () => onToggle(habit),
+                      onEdit: () => onEdit(habit),
+                    ))
                 .toList(),
           ),
         ),
@@ -822,12 +791,9 @@ class DailyPage extends StatelessWidget {
 
 class AnalyticsPage extends StatelessWidget {
   final List<Habit> habits;
-
   const AnalyticsPage({super.key, required this.habits});
-
   int doneOn(DateTime date) =>
       habits.where((habit) => habit.isDone(date)).length;
-
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -839,12 +805,7 @@ class AnalyticsPage extends StatelessWidget {
     for (final day in days) total += doneOn(day);
     final percent = habits.isEmpty ? 0.0 : total / (habits.length * 7);
     final top = [...habits]
-      ..sort(
-        (a, b) => b
-            .completedInMonth(now)
-            .compareTo(a.completedInMonth(now)),
-      );
-
+      ..sort((a, b) => b.completedInMonth(now).compareTo(a.completedInMonth(now)));
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -974,50 +935,44 @@ class StatCard extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
-
   const StatCard({
     super.key,
     required this.label,
     required this.value,
     required this.icon,
   });
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(17),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppColors.blue),
-          const SizedBox(height: 16),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
-          ),
-          Text(label, style: const TextStyle(color: AppColors.muted)),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(17),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: AppColors.blue),
+            const SizedBox(height: 16),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
+            ),
+            Text(label, style: const TextStyle(color: AppColors.muted)),
+          ],
+        ),
+      );
 }
 
 class TodoPage extends StatefulWidget {
   final List<Map<String, dynamic>> todos;
   final VoidCallback onAdd;
   final Future<void> Function() onChanged;
-
   const TodoPage({
     super.key,
     required this.todos,
     required this.onAdd,
     required this.onChanged,
   });
-
   @override
   State<TodoPage> createState() => _TodoPageState();
 }
@@ -1025,11 +980,8 @@ class TodoPage extends StatefulWidget {
 class _TodoPageState extends State<TodoPage> {
   @override
   Widget build(BuildContext context) {
-    final completed =
-        widget.todos.where((todo) => todo['done'] == true).length;
-    final progress =
-        widget.todos.isEmpty ? 0.0 : completed / widget.todos.length;
-
+    final completed = widget.todos.where((todo) => todo['done'] == true).length;
+    final progress = widget.todos.isEmpty ? 0.0 : completed / widget.todos.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1128,9 +1080,7 @@ class _TodoPageState extends State<TodoPage> {
                           leading: Checkbox(
                             value: done,
                             onChanged: (value) async {
-                              setState(
-                                () => todo['done'] = value ?? false,
-                              );
+                              setState(() => todo['done'] = value ?? false);
                               await widget.onChanged();
                             },
                           ),
@@ -1156,16 +1106,13 @@ class _TodoPageState extends State<TodoPage> {
 
 class ProfilePage extends StatelessWidget {
   final List<Habit> habits;
-
   const ProfilePage({super.key, required this.habits});
-
   @override
   Widget build(BuildContext context) {
     final totalCompleted = habits.fold<int>(
       0,
       (sum, habit) => sum + habit.completedInMonth(DateTime.now()),
     );
-
     return SingleChildScrollView(
       child: Column(
         children: [
