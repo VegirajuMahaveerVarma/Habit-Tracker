@@ -17,6 +17,8 @@ jobs:
           cache: true
       - name: Generate Android platform
         run: flutter create --platforms=android .
+      - name: Enable Android core library desugaring
+        run: dart run tool/enable_android_desugaring.dart
       - name: Get dependencies
         run: flutter pub get
       - name: Analyze
