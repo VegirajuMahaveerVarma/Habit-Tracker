@@ -44,7 +44,7 @@ Future<void> notificationTapBackground(NotificationResponse response) async {
       'Daily habit reminder',
       scheduled,
       _alarmDetails(),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.alarmClock,
       payload: habitName,
     );
   } catch (_) {
@@ -161,17 +161,22 @@ class NotificationService {
     }
 
     try {
+      // alarmClock uses Android's alarm-clock mechanism rather than a normal
+      // notification alarm. This is the closest supported local-notification
+      // scheduling mode to the Clock app's alarm behavior.
       await _plugin.zonedSchedule(
         id,
         habitName,
         'Daily habit reminder',
         scheduled,
         _alarmDetails(),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.alarmClock,
         matchDateTimeComponents: DateTimeComponents.time,
         payload: habitName,
       );
     } catch (_) {
+      // If the user has not granted Android's exact-alarm special access,
+      // keep a best-effort reminder instead of silently dropping it.
       await _plugin.zonedSchedule(
         id,
         habitName,
