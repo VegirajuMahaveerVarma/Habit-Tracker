@@ -8,6 +8,7 @@ class StorageService {
   static const _moodsKey = 'moods_v1';
   static const _timerKey = 'focus_seconds_v1';
   static const _pinKey = 'app_pin_v1';
+  static const _nameKey = 'profile_name_v1';
 
   Future<List<Habit>> loadHabits() async {
     try {
@@ -73,6 +74,21 @@ class StorageService {
   Future<void> savePin(String? pin) async {
     final p = await SharedPreferences.getInstance();
     if (pin == null || pin.isEmpty) await p.remove(_pinKey); else await p.setString(_pinKey, pin);
+  }
+
+  Future<String> loadName() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_nameKey) ?? '';
+  }
+
+  Future<void> saveName(String name) async {
+    final p = await SharedPreferences.getInstance();
+    final value = name.trim();
+    if (value.isEmpty) {
+      await p.remove(_nameKey);
+    } else {
+      await p.setString(_nameKey, value);
+    }
   }
 
   List<Habit> defaultHabits() {
