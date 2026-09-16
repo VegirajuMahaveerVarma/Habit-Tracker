@@ -80,7 +80,9 @@ class _AppShellState extends State<AppShell> {
       reminders = r;
     });
 
-    if (r.enabled) await _scheduleReminders(r);
+    // Per-habit reminders are the source of truth. They must keep working
+    // even if the old global reminder setting was left disabled.
+    await _scheduleReminders();
   }
 
   int _notificationId(Habit habit) {
@@ -91,11 +93,12 @@ class _AppShellState extends State<AppShell> {
     return value % 100000 + 1;
   }
 
-  Future<void> _scheduleReminders(ReminderSettings settings) async {
+  Future<void> _scheduleReminders() async {
     await notifications.cancelAll();
-    if (!settings.enabled) return;
 
-    for (final habit in habits.where((item) => item.active && item.reminderEnabled)) {
+    for (final habit in habits.where(
+      (item) => item.active && item.reminderEnabled,
+    )) {
       await notifications.scheduleDaily(
         id: _notificationId(habit),
         habitName: habit.name,
@@ -138,7 +141,7 @@ class _AppShellState extends State<AppShell> {
     });
 
     await storage.saveHabits(habits);
-    if (reminders.enabled) await _scheduleReminders(reminders);
+    await _scheduleReminders();
   }
 
   Future<void> _editHabit(Habit habit) async {
@@ -173,7 +176,7 @@ class _AppShellState extends State<AppShell> {
       if (confirmed == true && mounted) {
         setState(() => habits.removeWhere((item) => item.id == habit.id));
         await storage.saveHabits(habits);
-        if (reminders.enabled) await _scheduleReminders(reminders);
+        await _scheduleReminders();
       }
       return;
     }
@@ -186,7 +189,7 @@ class _AppShellState extends State<AppShell> {
     habit.reminderMinute = result.reminderMinute;
     setState(() {});
     await storage.saveHabits(habits);
-    if (reminders.enabled) await _scheduleReminders(reminders);
+    await _scheduleReminders();
   }
 
   Future<void> _addTodo() async {
@@ -235,7 +238,9 @@ class _AppShellState extends State<AppShell> {
 
     setState(() => reminders = result);
     await storage.saveReminderSettings(result);
-    await _scheduleReminders(result);
+    // Keep this setting for compatibility with existing data, but scheduling
+    // itself is driven by each habit's Daily reminder switch.
+    await _scheduleReminders();
   }
 
   @override
@@ -1831,7 +1836,7 @@ class ProfilePage extends StatelessWidget {
                     subtitle: Text(
                       reminders.enabled
                           ? 'On · each habit has its own reminder time'
-                          : 'Off',
+                          : 'Per-habit alarms enabled',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                   ),
@@ -1842,11 +1847,11 @@ class ProfilePage extends StatelessWidget {
                       Icons.lock_outline,
                       color: AppColors.green,
                     ),
-                    title: Text(
+                    title: const Text(
                       'Private & offline',
                       style: TextStyle(fontWeight: FontWeight.w800),
                     ),
-                    subtitle: Text(
+                    subtitle: const Text(
                       'Your habit data stays on this device.',
                     ),
                   ),
@@ -1854,11 +1859,11 @@ class ProfilePage extends StatelessWidget {
                   const ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.tips_and_updates_outlined),
-                    title: Text(
+                    title: const Text(
                       'Tip',
                       style: TextStyle(fontWeight: FontWeight.w800),
                     ),
-                    subtitle: Text(
+                    subtitle: const Text(
                       'Long-press habits or To-Do tasks to edit them.',
                     ),
                   ),
