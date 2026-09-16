@@ -16,34 +16,27 @@ class Habit {
   })  : _name = name,
         completions = completions ?? {};
 
-  String get name {
+  String get name => _name;
+  String get displayName {
     final streak = currentStreak();
     if (streak <= 0) return _name;
-    final unit = streak == 1 ? 'day' : 'days';
-    return '$_name  🔥 $streak $unit';
+    return '$_name  🔥 $streak ${streak == 1 ? 'day' : 'days'}';
   }
 
-  set name(String value) {
-    _name = value.replaceFirst(RegExp(r'\s+🔥\s+\d+\s+(?:day|days)\$'), '');
-  }
+  set name(String value) => _name = value.trim();
 
   int completedInMonth(DateTime month) {
     var count = 0;
     final days = DateTime(month.year, month.month + 1, 0).day;
     for (var d = 1; d <= days; d++) {
-      if (completions[key(DateTime(month.year, month.month, d))] == true) {
-        count++;
-      }
+      if (isDone(DateTime(month.year, month.month, d))) count++;
     }
     return count;
   }
 
   int currentStreak([DateTime? from]) {
     var day = _dateOnly(from ?? DateTime.now());
-    if (!isDone(day)) {
-      day = day.subtract(const Duration(days: 1));
-    }
-
+    if (!isDone(day)) day = day.subtract(const Duration(days: 1));
     var streak = 0;
     while (isDone(day)) {
       streak++;
@@ -89,9 +82,6 @@ class Habit {
         completions: Map<String, bool>.from(json['completions'] as Map? ?? {}),
       );
 
-  static DateTime _dateOnly(DateTime date) =>
-      DateTime(date.year, date.month, date.day);
-
-  static String key(DateTime date) =>
-      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  static DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
+  static String key(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 }
