@@ -4,6 +4,9 @@ class Habit {
   String category;
   int goal;
   bool active;
+  bool reminderEnabled;
+  int reminderHour;
+  int reminderMinute;
   final Map<String, bool> completions;
 
   Habit({
@@ -12,6 +15,9 @@ class Habit {
     this.category = 'Daily',
     this.goal = 30,
     this.active = true,
+    this.reminderEnabled = false,
+    this.reminderHour = 20,
+    this.reminderMinute = 0,
     Map<String, bool>? completions,
   })  : _name = name,
         completions = completions ?? {};
@@ -70,6 +76,9 @@ class Habit {
         'category': category,
         'goal': goal,
         'active': active,
+        'reminderEnabled': reminderEnabled,
+        'reminderHour': reminderHour,
+        'reminderMinute': reminderMinute,
         'completions': completions,
       };
 
@@ -79,9 +88,14 @@ class Habit {
         category: json['category'] as String? ?? 'Daily',
         goal: json['goal'] as int? ?? 30,
         active: json['active'] as bool? ?? true,
+        reminderEnabled: json['reminderEnabled'] as bool? ?? false,
+        reminderHour: json['reminderHour'] as int? ?? 20,
+        reminderMinute: json['reminderMinute'] as int? ?? 0,
         completions: Map<String, bool>.from(json['completions'] as Map? ?? {}),
       );
 
   static DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
-  static String key(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  static String key(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 }
