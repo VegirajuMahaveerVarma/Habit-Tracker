@@ -23,17 +23,7 @@ class HabitApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Habit Tracker',
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: AppColors.bg,
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.blue),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
-        ),
-      ),
+      theme: ThemeData(useMaterial3: true, scaffoldBackgroundColor: AppColors.bg, colorScheme: ColorScheme.fromSeed(seedColor: AppColors.blue)),
       home: const HomeShell(),
     );
   }
@@ -46,21 +36,18 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   final store = StorageService();
-  List<Habit> habits = <Habit>[];
-  List<Map<String, dynamic>> todos = <Map<String, dynamic>>[];
-  Map<String, int> moods = <String, int>{};
-  Map<String, int> timers = <String, int>{};
+  List<Habit> habits = [];
+  List<Map<String, dynamic>> todos = [];
+  Map<String, int> moods = {};
+  Map<String, int> timers = {};
   DateTime selected = DateTime.now();
   String? pin;
+  int tab = 0;
   bool loading = true;
   bool locked = false;
-  int tab = 0;
 
   @override
-  void initState() {
-    super.initState();
-    load();
-  }
+  void initState() { super.initState(); load(); }
 
   Future<void> load() async {
     habits = await store.loadHabits();
@@ -75,37 +62,29 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> saveHabits() => store.saveHabits(habits);
 
   Future<void> addHabit() async {
-    final form = await showModalBottomSheet<HabitForm>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const HabitEditor(),
-    );
+    final form = await showModalBottomSheet<HabitForm>(context: context, isScrollControlled: true, builder: (_) => const HabitEditor());
     if (form == null || form.name.trim().isEmpty) return;
     habits.add(form.makeHabit());
     setState(() {});
     await saveHabits();
   }
 
-  Future<void> editHabit(Habit habit) async {
-    final form = await showModalBottomSheet<HabitForm>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => HabitEditor(habit: habit),
-    );
+  Future<void> editHabit(Habit h) async {
+    final form = await showModalBottomSheet<HabitForm>(context: context, isScrollControlled: true, builder: (_) => HabitEditor(habit: h));
     if (form == null) return;
     if (form.delete) {
-      habits.removeWhere((h) => h.id == habit.id);
+      habits.removeWhere((x) => x.id == h.id);
     } else {
-      habit.name = form.name;
-      habit.category = form.category;
-      habit.goal = form.goal;
-      habit.unit = form.unit;
-      habit.frequency = form.frequency;
-      habit.weekdays = form.weekdays;
-      habit.tags = form.tags;
-      habit.notes = form.notes;
-      habit.pinned = form.pinned;
-      habit.active = form.active;
+      h.name = form.name;
+      h.category = form.category;
+      h.goal = form.goal;
+      h.unit = form.unit;
+      h.frequency = form.frequency;
+      h.weekdays = form.weekdays;
+      h.tags = form.tags;
+      h.notes = form.notes;
+      h.pinned = form.pinned;
+      h.active = form.active;
     }
     setState(() {});
     await saveHabits();
@@ -117,16 +96,15 @@ class _HomeShellState extends State<HomeShell> {
     await saveHabits();
   }
 
+  Future<void> openHabit(Habit h) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => HabitDetail(habit: h, onSave: saveHabits)));
+    if (mounted) setState(() {});
+  }
+
   Future<void> addTodo() async {
     final form = await showDialog<TodoForm>(context: context, builder: (_) => const TodoEditor());
     if (form == null || form.title.trim().isEmpty) return;
-    todos.add(<String, dynamic>{
-      'id': DateTime.now().microsecondsSinceEpoch.toString(),
-      'title': form.title.trim(),
-      'category': form.category,
-      'priority': form.priority,
-      'done': false,
-    });
+    todos.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'title': form.title.trim(), 'category': form.category, 'priority': form.priority, 'done': false});
     setState(() {});
     await store.saveTodos(todos);
   }
@@ -153,9 +131,10 @@ class _HomeShellState extends State<HomeShell> {
     await store.saveTodos(todos);
   }
 
-  Future<void> openHabit(Habit h) async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => HabitDetail(habit: h, onSave: saveHabits)));
-    if (mounted) setState(() {});
+  Future<void> mood(int value) async {
+    moods[Habit.key(selected)] = value;
+    setState(() {});
+    await store.saveMoods(moods);
   }
 
   Future<void> openTimer() async {
@@ -165,12 +144,6 @@ class _HomeShellState extends State<HomeShell> {
     timers[key] = value;
     setState(() {});
     await store.saveTimerSeconds(timers);
-  }
-
-  Future<void> setMood(int value) async {
-    moods[Habit.key(selected)] = value;
-    setState(() {});
-    await store.saveMoods(moods);
   }
 
   Future<void> setPin() async {
@@ -190,7 +163,7 @@ class _HomeShellState extends State<HomeShell> {
     if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     if (locked) return LockScreen(onUnlock: unlock);
     final pages = <Widget>[
-      Dashboard(habits: habits, date: selected, moods: moods, onToggle: toggleHabit, onEdit: editHabit, onOpen: openHabit, onAdd: addHabit, onMood: setMood, onTimer: openTimer),
+      Dashboard(habits: habits, date: selected, moods: moods, onToggle: toggleHabit, onEdit: editHabit, onOpen: openHabit, onAdd: addHabit, onMood: mood, onTimer: openTimer),
       Daily(habits: habits, date: selected, onDate: (d) => setState(() => selected = d), onToggle: toggleHabit, onEdit: editHabit, onOpen: openHabit, onAdd: addHabit),
       Stats(habits: habits),
       TodoPage(todos: todos, onAdd: addTodo, onEdit: editTodo, onToggle: toggleTodo, onDelete: deleteTodo),
@@ -221,15 +194,11 @@ class PageHeader extends StatelessWidget {
   const PageHeader({super.key, required this.title, required this.subtitle, this.action});
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-      child: Row(
-        children: <Widget>[
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)), Text(subtitle, style: const TextStyle(color: AppColors.muted))])),
-          if (action != null) action!,
-        ],
-      ),
-    );
+    final children = <Widget>[
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)), Text(subtitle, style: const TextStyle(color: AppColors.muted))])),
+    ];
+    if (action != null) children.add(action!);
+    return Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 14), child: Row(children: children));
   }
 }
 
@@ -238,7 +207,7 @@ class CardBox extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   const CardBox({super.key, required this.child, this.padding = const EdgeInsets.all(18)});
   @override
-  Widget build(BuildContext context) => Container(padding: padding, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.border)), child: child);
+  Widget build(BuildContext context) => Container(padding: padding, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)), child: child);
 }
 
 class SectionTitle extends StatelessWidget {
@@ -247,7 +216,17 @@ class SectionTitle extends StatelessWidget {
   final VoidCallback? onAdd;
   const SectionTitle({super.key, required this.title, this.label = 'Add', this.onAdd});
   @override
-  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 10), child: Row(children: <Widget>[Expanded(child: Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900))), if (onAdd != null) TextButton(onPressed: onAdd, child: Text(label))]));
+  Widget build(BuildContext context) {
+    return Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 10), child: Row(children: [Expanded(child: Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900))), if (onAdd != null) TextButton(onPressed: onAdd, child: Text(label))]));
+  }
+}
+
+class MiniStat extends StatelessWidget {
+  final String value;
+  final String label;
+  const MiniStat({super.key, required this.value, required this.label});
+  @override
+  Widget build(BuildContext context) => CardBox(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), Text(label, style: const TextStyle(fontSize: 11, color: AppColors.muted))]));
 }
 
 class Dashboard extends StatefulWidget {
@@ -280,16 +259,32 @@ class _DashboardState extends State<Dashboard> {
       return textMatch && filterMatch;
     }).toList();
     visible.sort((a, b) => a.pinned == b.pinned ? 0 : (a.pinned ? -1 : 1));
-    return SingleChildScrollView(padding: const EdgeInsets.only(bottom: 30), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+    final streak = active.fold<int>(0, (max, h) => h.currentStreak(widget.date) > max ? h.currentStreak(widget.date) : max);
+    final moodValue = widget.moods[Habit.key(widget.date)];
+
+    final filterWidgets = <Widget>[];
+    for (final item in ['All', 'Pinned', 'Completed', 'Missed']) {
+      filterWidgets.add(Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(item), selected: filter == item, onSelected: (_) => setState(() => filter = item))));
+    }
+    final habitWidgets = <Widget>[];
+    for (final h in visible) {
+      habitWidgets.add(Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5), child: HabitTile(habit: h, date: widget.date, onToggle: () => widget.onToggle(h, widget.date), onOpen: () => widget.onOpen(h), onEdit: () => widget.onEdit(h))));
+    }
+    return SingleChildScrollView(padding: const EdgeInsets.only(bottom: 30), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       PageHeader(title: 'Good day 👋', subtitle: DateFormat('EEEE, d MMMM').format(widget.date), action: IconButton(onPressed: widget.onTimer, icon: const Icon(Icons.timer_outlined))),
       Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TextField(onChanged: (v) => setState(() => search = v), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search habits or tags'))),
       const SizedBox(height: 8),
-      SizedBox(height: 44, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 20), children: <Widget>['All', 'Pinned', 'Completed', 'Missed'].map((x) => Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(x), selected: filter == x, onSelected: (_) => setState(() => filter = x))).toList())),
-      Padding(padding: const EdgeInsets.fromLTRB(20, 10, 20, 0), child: CardBox(child: Row(children: <Widget>[SizedBox(width: 82, height: 82, child: Stack(fit: StackFit.expand, children: <Widget>[CircularProgressIndicator(value: progress, strokeWidth: 9, color: AppColors.blue, backgroundColor: AppColors.soft), Center(child: Text('${(progress * 100).round()}%', style: const TextStyle(fontWeight: FontWeight.w900)))])), const SizedBox(width: 18), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[const Text("Today's progress", style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), Text('$done of ${scheduled.length} scheduled', style: const TextStyle(color: AppColors.muted)), const SizedBox(height: 8), LinearProgressIndicator(value: progress, backgroundColor: AppColors.soft)]))]))),
+      SizedBox(height: 44, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 20), children: filterWidgets)),
+      Padding(padding: const EdgeInsets.fromLTRB(20, 10, 20, 0), child: CardBox(child: Row(children: [SizedBox(width: 82, height: 82, child: Stack(fit: StackFit.expand, children: [CircularProgressIndicator(value: progress, strokeWidth: 9, color: AppColors.blue, backgroundColor: AppColors.soft), Center(child: Text('${(progress * 100).round()}%', style: const TextStyle(fontWeight: FontWeight.w900)))])), const SizedBox(width: 18), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("Today's progress", style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), Text('$done of ${scheduled.length} scheduled', style: const TextStyle(color: AppColors.muted)), const SizedBox(height: 8), LinearProgressIndicator(value: progress, backgroundColor: AppColors.soft)]))]))),
+      Padding(padding: const EdgeInsets.fromLTRB(20, 14, 20, 0), child: Row(children: [Expanded(child: MiniStat(value: '$streak', label: 'Current streak')), const SizedBox(width: 10), Expanded(child: MiniStat(value: '${active.length}', label: 'Active habits'))])),
       SectionTitle(title: "Today's habits", label: '＋ Add', onAdd: widget.onAdd),
-      if (visible.isEmpty) const Padding(padding: EdgeInsets.all(30), child: Center(child: Text('No matching habits.', style: TextStyle(color: AppColors.muted)))) else ...visible.map((h) => Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4), child: HabitTile(habit: h, date: widget.date, onToggle: () => widget.onToggle(h, widget.date), onOpen: () => widget.onOpen(h), onEdit: () => widget.onEdit(h)))),
+      if (habitWidgets.isEmpty) const Padding(padding: EdgeInsets.all(30), child: Center(child: Text('No matching habits.', style: TextStyle(color: AppColors.muted)))) else ...habitWidgets,
       const SectionTitle(title: 'Mood'),
-      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: List<Widget>.generate(5, (i) { final selected = widget.moods[Habit.key(widget.date)] == i + 1; return IconButton(onPressed: () => widget.onMood(i + 1), icon: Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: selected ? AppColors.soft : Colors.transparent, borderRadius: BorderRadius.circular(10)), child: Text(<String>['😫', '😕', '😐', '🙂', '😄'][i], style: const TextStyle(fontSize: 27)))); }))),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: List<Widget>.generate(5, (i) {
+        final value = i + 1;
+        final selected = moodValue == value;
+        return IconButton(onPressed: () => widget.onMood(value), icon: Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: selected ? AppColors.soft : Colors.transparent, borderRadius: BorderRadius.circular(10)), child: Text(['😫', '😕', '😐', '🙂', '😄'][i], style: const TextStyle(fontSize: 27))));
+      }))),
     ]));
   }
 }
@@ -304,7 +299,7 @@ class HabitTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final done = habit.isDone(date);
-    return GestureDetector(onTap: onOpen, onLongPress: onEdit, child: CardBox(padding: const EdgeInsets.all(13), child: Row(children: <Widget>[IconButton(onPressed: onToggle, icon: Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, color: done ? AppColors.green : AppColors.muted, size: 28)), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[Text(habit.name, style: TextStyle(fontWeight: FontWeight.w800, decoration: done ? TextDecoration.lineThrough : null)), Text('${habit.category} · ${habit.currentStreak(date)} day streak', style: const TextStyle(color: AppColors.muted, fontSize: 12))])), if (habit.pinned) const Icon(Icons.push_pin, size: 18, color: AppColors.blue)])));
+    return GestureDetector(onTap: onOpen, onLongPress: onEdit, child: CardBox(padding: const EdgeInsets.all(13), child: Row(children: [IconButton(onPressed: onToggle, icon: Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, color: done ? AppColors.green : AppColors.muted, size: 28)), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(habit.name, style: TextStyle(fontWeight: FontWeight.w800, decoration: done ? TextDecoration.lineThrough : null)), Text('${habit.category} · ${habit.currentStreak(date)} day streak', style: const TextStyle(color: AppColors.muted, fontSize: 12))])), if (habit.pinned) const Icon(Icons.push_pin, size: 18, color: AppColors.blue)])));
   }
 }
 
@@ -319,13 +314,22 @@ class Daily extends StatelessWidget {
   const Daily({super.key, required this.habits, required this.date, required this.onDate, required this.onToggle, required this.onEdit, required this.onOpen, required this.onAdd});
   @override
   Widget build(BuildContext context) {
-    final days = List<DateTime>.generate(14, (i) => DateTime.now().subtract(Duration(days: 7 - i)));
-    final today = habits.where((h) => h.active && h.isScheduled(date)).toList();
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+    final dates = List<DateTime>.generate(14, (i) => DateTime.now().subtract(Duration(days: 7 - i)));
+    final dayHabits = habits.where((h) => h.active && h.isScheduled(date)).toList();
+    final dayWidgets = <Widget>[];
+    for (final h in dayHabits) {
+      dayWidgets.add(Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: HabitTile(habit: h, date: date, onToggle: () => onToggle(h, date), onOpen: () => onOpen(h), onEdit: () => onEdit(h))));
+    }
+    final dateWidgets = <Widget>[];
+    for (final d in dates) {
+      final selected = Habit.key(d) == Habit.key(date);
+      dateWidgets.add(GestureDetector(onTap: () => onDate(d), child: Container(width: 58, margin: const EdgeInsets.only(right: 8), decoration: BoxDecoration(color: selected ? AppColors.blue : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.border)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(DateFormat('EEE').format(d).substring(0, 2), style: TextStyle(color: selected ? Colors.white : AppColors.muted)), Text('${d.day}', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: selected ? Colors.white : AppColors.text))]))));
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       PageHeader(title: 'Daily', subtitle: DateFormat('MMMM yyyy').format(date)),
-      SizedBox(height: 82, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 20), children: days.map((d) { final selected = Habit.key(d) == Habit.key(date); return GestureDetector(onTap: () => onDate(d), child: Container(width: 58, margin: const EdgeInsets.only(right: 8), decoration: BoxDecoration(color: selected ? AppColors.blue : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.border)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: <Widget>[Text(DateFormat('EEE').format(d).substring(0, 2), style: TextStyle(color: selected ? Colors.white : AppColors.muted)), Text('${d.day}', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: selected ? Colors.white : AppColors.text))]))); }).toList())),
+      SizedBox(height: 82, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 20), children: dateWidgets)),
       SectionTitle(title: 'Habits for ${DateFormat('d MMM').format(date)}', label: '＋ Add', onAdd: onAdd),
-      Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(20, 0, 20, 30), children: today.map((h) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: HabitTile(habit: h, date: date, onToggle: () => onToggle(h, date), onOpen: () => onOpen(h), onEdit: () => onEdit(h)))).toList())),
+      Expanded(child: dayWidgets.isEmpty ? const Center(child: Text('No habits scheduled.', style: TextStyle(color: AppColors.muted))) : ListView(padding: const EdgeInsets.fromLTRB(20, 0, 20, 30), children: dayWidgets)),
     ]);
   }
 }
@@ -347,20 +351,31 @@ class _StatsState extends State<Stats> {
     var done = 0;
     for (var i = 0; i < range; i++) {
       final d = now.subtract(Duration(days: i));
-      for (final h in active) { if (h.isScheduled(d)) { total++; if (h.isDone(d)) done++; } }
+      for (final h in active) {
+        if (h.isScheduled(d)) {
+          total++;
+          if (h.isDone(d)) done++;
+        }
+      }
     }
     final rate = total == 0 ? 0.0 : done / total;
     final current = active.fold<int>(0, (m, h) => h.currentStreak() > m ? h.currentStreak() : m);
     final best = active.fold<int>(0, (m, h) => h.bestStreak() > m ? h.bestStreak() : m);
     final completions = active.fold<int>(0, (s, h) => s + h.totalCompletions());
-    return SingleChildScrollView(padding: const EdgeInsets.only(bottom: 30), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+    final segments = <ButtonSegment<int>>[
+      const ButtonSegment(value: 7, label: Text('7D')),
+      const ButtonSegment(value: 30, label: Text('30D')),
+      const ButtonSegment(value: 90, label: Text('90D')),
+      const ButtonSegment(value: 365, label: Text('1Y')),
+    ];
+    return SingleChildScrollView(padding: const EdgeInsets.only(bottom: 30), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const PageHeader(title: 'Stats', subtitle: 'Your consistency at a glance'),
-      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: SegmentedButton<int>(segments: const <ButtonSegment<int>>[ButtonSegment(value: 7, label: Text('7D')), ButtonSegment(value: 30, label: Text('30D')), ButtonSegment(value: 90, label: Text('90D')), ButtonSegment(value: 365, label: Text('1Y'))], selected: <int>{range}, onSelectionChanged: (v) => setState(() => range = v.first))),
-      Padding(padding: const EdgeInsets.all(20), child: GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 2, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 1.8, children: <Widget>[StatCard(value: '${(rate * 100).round()}%', label: 'Completion'), StatCard(value: '$current', label: 'Current streak'), StatCard(value: '$best', label: 'Best streak'), StatCard(value: '$completions', label: 'Total completions')])),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: SegmentedButton<int>(segments: segments, selected: {range}, onSelectionChanged: (v) => setState(() => range = v.first))),
+      Padding(padding: const EdgeInsets.all(20), child: GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 2, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 1.8, children: [StatCard(value: '${(rate * 100).round()}%', label: 'Completion'), StatCard(value: '$current', label: 'Current streak'), StatCard(value: '$best', label: 'Best streak'), StatCard(value: '$completions', label: 'Total completions')])),
       const SectionTitle(title: 'Activity record'),
-      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Column(children: <Widget>[Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: <Widget>[IconButton(onPressed: () => setState(() => year--), icon: const Icon(Icons.chevron_left)), Text('$year', style: const TextStyle(fontWeight: FontWeight.w900)), IconButton(onPressed: () => setState(() => year++), icon: const Icon(Icons.chevron_right))]), ActivityHeatmap(habits: active, year: year)]))),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Column(children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [IconButton(onPressed: () => setState(() => year--), icon: const Icon(Icons.chevron_left)), Text('$year', style: const TextStyle(fontWeight: FontWeight.w900)), IconButton(onPressed: () => setState(() => year++), icon: const Icon(Icons.chevron_right))]), ActivityHeatmap(habits: active, year: year)]))),
       const SectionTitle(title: 'Streak history'),
-      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: active.isEmpty ? const Text('Create a habit to see streaks.') : Column(children: active.map((h) => ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.local_fire_department_outlined, color: AppColors.amber), title: Text(h.name), subtitle: Text('Current ${h.currentStreak()} days · Best ${h.bestStreak()} days'))).toList()))),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: active.isEmpty ? const Text('Create a habit to see streaks.') : StreakHistory(habits: active))),
       const SectionTitle(title: 'Needs attention'),
       Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: NeedsAttention(habits: active))),
       const SectionTitle(title: 'Weekly review'),
@@ -373,17 +388,23 @@ class StatCard extends StatelessWidget {
   final String value;
   final String label;
   const StatCard({super.key, required this.value, required this.label});
-  @override Widget build(BuildContext context) => CardBox(padding: const EdgeInsets.all(13), child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 11))]));
+  @override
+  Widget build(BuildContext context) => CardBox(padding: const EdgeInsets.all(13), child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 11))]));
 }
 
 class ActivityHeatmap extends StatelessWidget {
   final List<Habit> habits;
   final int year;
   const ActivityHeatmap({super.key, required this.habits, required this.year});
-  int level(DateTime d) {
+  int level(DateTime day) {
     var total = 0;
     var done = 0;
-    for (final h in habits) { if (h.isScheduled(d)) { total++; if (h.isDone(d)) done++; } }
+    for (final h in habits) {
+      if (h.isScheduled(day)) {
+        total++;
+        if (h.isDone(day)) done++;
+      }
+    }
     if (total == 0 || done == 0) return 0;
     if (done == total) return 4;
     if (done * 2 >= total) return 3;
@@ -392,16 +413,33 @@ class ActivityHeatmap extends StatelessWidget {
   }
   @override
   Widget build(BuildContext context) {
-    final start = DateTime(year, 1, 1);
-    final monday = start.subtract(Duration(days: start.weekday - 1));
-    return SizedBox(height: 115, child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: List<Widget>.generate(53, (week) {
-      return Padding(padding: const EdgeInsets.only(right: 3), child: Column(children: List<Widget>.generate(7, (row) {
-        final d = monday.add(Duration(days: week * 7 + row));
-        final l = d.year == year ? level(d) : 0;
-        final color = l == 0 ? AppColors.bg : Color.lerp(AppColors.soft, AppColors.blue, l / 4) ?? AppColors.blue;
-        return Container(width: 10, height: 10, margin: const EdgeInsets.only(bottom: 3), decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)));
-      })));
-    }))));
+    final first = DateTime(year, 1, 1);
+    final monday = first.subtract(Duration(days: first.weekday - 1));
+    final columns = <Widget>[];
+    for (var week = 0; week < 53; week++) {
+      final cells = <Widget>[];
+      for (var row = 0; row < 7; row++) {
+        final day = monday.add(Duration(days: week * 7 + row));
+        final l = day.year == year ? level(day) : 0;
+        final color = l == 0 ? AppColors.bg : (Color.lerp(AppColors.soft, AppColors.blue, l / 4) ?? AppColors.blue);
+        cells.add(Container(width: 10, height: 10, margin: const EdgeInsets.only(bottom: 3), decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))));
+      }
+      columns.add(Padding(padding: const EdgeInsets.only(right: 3), child: Column(children: cells)));
+    }
+    return SizedBox(height: 100, child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: columns)));
+  }
+}
+
+class StreakHistory extends StatelessWidget {
+  final List<Habit> habits;
+  const StreakHistory({super.key, required this.habits});
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+    for (final h in habits) {
+      children.add(ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.local_fire_department_outlined, color: AppColors.amber), title: Text(h.name), subtitle: Text('Current ${h.currentStreak()} days · Best ${h.bestStreak()} days')));
+    }
+    return Column(children: children);
   }
 }
 
@@ -430,10 +468,15 @@ class WeeklyReview extends StatelessWidget {
     var done = 0;
     for (var i = 0; i < 7; i++) {
       final d = DateTime.now().subtract(Duration(days: i));
-      for (final h in habits) { if (h.isScheduled(d)) { total++; if (h.isDone(d)) done++; } }
+      for (final h in habits) {
+        if (h.isScheduled(d)) {
+          total++;
+          if (h.isDone(d)) done++;
+        }
+      }
     }
     final value = total == 0 ? 0.0 : done / total;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[Text('${(value * 100).round()}% completion in the last 7 days', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 8), LinearProgressIndicator(value: value, backgroundColor: AppColors.soft)]);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${(value * 100).round()}% completion in the last 7 days', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 8), LinearProgressIndicator(value: value, backgroundColor: AppColors.soft)]);
   }
 }
 
@@ -456,19 +499,24 @@ class _TodoPageState extends State<TodoPage> {
       final item = entry.value;
       final q = search.toLowerCase();
       final textMatch = q.isEmpty || '${item['title']}'.toLowerCase().contains(q);
-      final filterMatch = filter == 'All' || (filter == 'Open' && item['done'] != true) || (filter == 'Completed' && item['done'] == true) || (filter == 'High' && (item['priority'] as num?)?.toInt() == 3);
+      final p = (item['priority'] as num?)?.toInt() ?? 1;
+      final filterMatch = filter == 'All' || (filter == 'Open' && item['done'] != true) || (filter == 'Completed' && item['done'] == true) || (filter == 'High' && p == 3);
       return textMatch && filterMatch;
     }).toList();
+    final chips = <Widget>[];
+    for (final x in ['All', 'Open', 'Completed', 'High']) {
+      chips.add(Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(x), selected: filter == x, onSelected: (_) => setState(() => filter = x))));
+    }
     final done = widget.todos.where((x) => x['done'] == true).length;
-    return Column(children: <Widget>[
+    return Column(children: [
       PageHeader(title: 'To-Do', subtitle: '$done completed · ${widget.todos.length - done} remaining', action: IconButton(onPressed: widget.onAdd, icon: const Icon(Icons.add))),
       Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TextField(onChanged: (v) => setState(() => search = v), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search tasks'))),
       const SizedBox(height: 8),
-      SizedBox(height: 44, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 20), children: <Widget>['All', 'Open', 'Completed', 'High'].map((x) => Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(x), selected: filter == x, onSelected: (_) => setState(() => filter = x)))).toList())),
+      SizedBox(height: 44, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 20), children: chips)),
       Expanded(child: entries.isEmpty ? const Center(child: Text('No tasks.', style: TextStyle(color: AppColors.muted))) : ListView.builder(padding: const EdgeInsets.all(20), itemCount: entries.length, itemBuilder: (context, i) {
         final entry = entries[i];
         final item = entry.value;
-        return Dismissible(key: ValueKey(item['id']), background: Container(color: AppColors.red), onDismissed: (_) => widget.onDelete(entry.key), child: Card(margin: const EdgeInsets.only(bottom: 8), child: ListTile(onTap: () => widget.onEdit(entry.key), leading: Checkbox(value: item['done'] == true, onChanged: (_) => widget.onToggle(entry.key)), title: Text('${item['title']}', style: TextStyle(fontWeight: FontWeight.w800, decoration: item['done'] == true ? TextDecoration.lineThrough : null)), subtitle: Text('${item['category'] ?? 'General'} · ${priorityName(item['priority'] as num?)}'), trailing: const Icon(Icons.edit_outlined, size: 18))));
+        return Dismissible(key: ValueKey(item['id']), background: Container(color: AppColors.red), onDismissed: (_) => widget.onDelete(entry.key), child: Card(child: ListTile(onTap: () => widget.onEdit(entry.key), leading: Checkbox(value: item['done'] == true, onChanged: (_) => widget.onToggle(entry.key)), title: Text('${item['title']}', style: TextStyle(fontWeight: FontWeight.w800, decoration: item['done'] == true ? TextDecoration.lineThrough : null)), subtitle: Text('${item['category'] ?? 'General'} · ${priorityName(item['priority'] as num?)}'))));
       })),
     ]);
   }
@@ -491,15 +539,15 @@ class Profile extends StatelessWidget {
   Widget build(BuildContext context) {
     final total = habits.fold<int>(0, (sum, h) => sum + h.totalCompletions());
     final best = habits.fold<int>(0, (max, h) => h.bestStreak() > max ? h.bestStreak() : max);
-    return SingleChildScrollView(padding: const EdgeInsets.only(bottom: 30), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+    return SingleChildScrollView(padding: const EdgeInsets.only(bottom: 30), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const PageHeader(title: 'Profile', subtitle: 'Your private habit space'),
-      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Row(children: <Widget>[const CircleAvatar(radius: 32, backgroundColor: AppColors.soft, child: Icon(Icons.person, color: AppColors.blue, size: 32)), const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[const Text('Habit Builder', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), Text('${habits.length} habits · $total completions', style: const TextStyle(color: AppColors.muted))]))]))),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Row(children: [const CircleAvatar(radius: 32, backgroundColor: AppColors.soft, child: Icon(Icons.person, color: AppColors.blue, size: 32)), const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Habit Builder', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), Text('${habits.length} habits · $total completions', style: const TextStyle(color: AppColors.muted))]))]))),
       const SectionTitle(title: 'Achievements'),
       Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Achievements(total: total, best: best)),
       const SectionTitle(title: 'Tools'),
-      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Column(children: <Widget>[ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.timer_outlined, color: AppColors.blue), title: const Text('Focus timer'), onTap: onTimer), ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.lock_outline, color: AppColors.blue), title: Text(hasPin ? 'Change app PIN' : 'Set app PIN'), onTap: onPin)]))),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Column(children: [ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.timer_outlined, color: AppColors.blue), title: const Text('Focus timer'), onTap: onTimer), ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.lock_outline, color: AppColors.blue), title: Text(hasPin ? 'Change app PIN' : 'Set app PIN'), onTap: onPin)]))),
       const SectionTitle(title: 'Offline privacy'),
-      const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Text('Habit data is stored locally on this device. Alarm, cloud backup and dark-mode customization are not included.', style: TextStyle(height: 1.4)))),
+      const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Text('Habit data stays on this device. Alarm, cloud backup and dark-mode customization are not included.', style: TextStyle(height: 1.4)))),
     ]));
   }
 }
@@ -516,7 +564,11 @@ class Achievements extends StatelessWidget {
       <Object>['🏆', '30 day streak', best >= 30],
       <Object>['💯', '100 completions', total >= 100],
     ];
-    return CardBox(child: Wrap(spacing: 8, runSpacing: 8, children: data.map((x) => Chip(avatar: Text(x[0] as String), label: Text(x[1] as String), backgroundColor: (x[2] as bool) ? AppColors.soft : AppColors.bg)).toList()));
+    final chips = <Widget>[];
+    for (final x in data) {
+      chips.add(Chip(avatar: Text(x[0] as String), label: Text(x[1] as String), backgroundColor: (x[2] as bool) ? AppColors.soft : AppColors.bg));
+    }
+    return CardBox(child: Wrap(spacing: 8, runSpacing: 8, children: chips));
   }
 }
 
@@ -532,22 +584,34 @@ class _HabitDetailState extends State<HabitDetail> {
   @override void initState() { super.initState(); final n = DateTime.now(); month = DateTime(n.year, n.month, 1); }
   Future<void> toggle(DateTime d) async { widget.habit.setDone(d, !widget.habit.isDone(d)); setState(() {}); await widget.onSave(); }
   Future<void> addMeasurement() async { final value = await showDialog<double>(context: context, builder: (_) => const MeasurementDialog()); if (value == null) return; widget.habit.measurements[Habit.key(DateTime.now())] = value; setState(() {}); await widget.onSave(); }
-  Future<void> addJournal() async { final c = TextEditingController(); final value = await showDialog<String>(context: context, builder: (_) => AlertDialog(title: const Text('Today journal'), content: TextField(controller: c, maxLines: 6), actions: <Widget>[TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, c.text), child: const Text('Save'))])); c.dispose(); if (value == null) return; widget.habit.journal[Habit.key(DateTime.now())] = value.trim(); setState(() {}); await widget.onSave(); }
+  Future<void> addJournal() async {
+    final controller = TextEditingController(text: widget.habit.journal[Habit.key(DateTime.now())] ?? '');
+    final value = await showDialog<String>(context: context, builder: (_) => AlertDialog(title: const Text('Today journal'), content: TextField(controller: controller, maxLines: 6), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Save'))]));
+    controller.dispose();
+    if (value == null) return;
+    widget.habit.journal[Habit.key(DateTime.now())] = value.trim();
+    setState(() {});
+    await widget.onSave();
+  }
   @override
   Widget build(BuildContext context) {
     final h = widget.habit;
     final days = DateTime(month.year, month.month + 1, 0).day;
     final rate = h.completionRate(month).clamp(0.0, 1.0).toDouble();
+    final measurementWidgets = <Widget>[];
     final measurements = h.measurements.entries.toList()..sort((a, b) => b.key.compareTo(a.key));
+    for (final e in measurements.take(8)) measurementWidgets.add(ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.show_chart, color: AppColors.blue), title: Text('${e.value} ${h.unit}'), subtitle: Text(e.key)));
+    final journalWidgets = <Widget>[];
     final journals = h.journal.entries.toList()..sort((a, b) => b.key.compareTo(a.key));
-    return Scaffold(appBar: AppBar(title: Text(h.name)), body: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-      CardBox(child: Row(children: <Widget>[SizedBox(width: 70, height: 70, child: CircularProgressIndicator(value: rate, strokeWidth: 8)), const SizedBox(width: 15), Expanded(child: Text('🔥 ${h.currentStreak()} day streak\nBest ${h.bestStreak()} days · ${(rate * 100).round()}% this month', style: const TextStyle(fontWeight: FontWeight.w800)))])),
+    for (final e in journals.take(7)) journalWidgets.add(ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.menu_book_outlined, color: AppColors.blue), title: Text(e.key), subtitle: Text(e.value, maxLines: 3, overflow: TextOverflow.ellipsis)));
+    return Scaffold(appBar: AppBar(title: Text(h.name)), body: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      CardBox(child: Row(children: [SizedBox(width: 70, height: 70, child: CircularProgressIndicator(value: rate, strokeWidth: 8)), const SizedBox(width: 15), Expanded(child: Text('🔥 ${h.currentStreak()} day streak\nBest ${h.bestStreak()} days · ${(rate * 100).round()}% this month', style: const TextStyle(fontWeight: FontWeight.w800)))])),
       const SectionTitle(title: 'Calendar'),
       CardBox(child: GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: days, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7), itemBuilder: (context, i) { final d = DateTime(month.year, month.month, i + 1); final done = h.isDone(d); return GestureDetector(onTap: h.isScheduled(d) ? () => toggle(d) : null, child: Container(margin: const EdgeInsets.all(3), decoration: BoxDecoration(color: done ? AppColors.blue : AppColors.bg, borderRadius: BorderRadius.circular(7)), child: Center(child: Text('${i + 1}', style: TextStyle(color: done ? Colors.white : AppColors.text, fontWeight: FontWeight.w700))))); })),
       SectionTitle(title: 'Measurements', label: '＋ Add', onAdd: addMeasurement),
-      CardBox(child: measurements.isEmpty ? const Text('No measurements yet.', style: TextStyle(color: AppColors.muted)) : Column(children: measurements.take(8).map((e) => ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.show_chart, color: AppColors.blue), title: Text('${e.value} ${h.unit}'), subtitle: Text(e.key))).toList())),
+      CardBox(child: measurementWidgets.isEmpty ? const Text('No measurements yet.', style: TextStyle(color: AppColors.muted)) : Column(children: measurementWidgets)),
       SectionTitle(title: 'Journal', label: '＋ Today', onAdd: addJournal),
-      CardBox(child: journals.isEmpty ? const Text('No journal entries yet.', style: TextStyle(color: AppColors.muted)) : Column(children: journals.take(7).map((e) => ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.menu_book_outlined, color: AppColors.blue), title: Text(e.key), subtitle: Text(e.value, maxLines: 3, overflow: TextOverflow.ellipsis))).toList())),
+      CardBox(child: journalWidgets.isEmpty ? const Text('No journal entries yet.', style: TextStyle(color: AppColors.muted)) : Column(children: journalWidgets)),
       const SectionTitle(title: 'Notes'),
       CardBox(child: Text(h.notes.isEmpty ? 'No notes added.' : h.notes)),
     ])));
@@ -555,17 +619,11 @@ class _HabitDetailState extends State<HabitDetail> {
 }
 
 class HabitForm {
-  final String name;
-  final String category;
+  final String name, category, unit, frequency, notes;
   final int goal;
-  final String unit;
-  final String frequency;
   final List<int> weekdays;
   final List<String> tags;
-  final String notes;
-  final bool pinned;
-  final bool active;
-  final bool delete;
+  final bool pinned, active, delete;
   const HabitForm({required this.name, required this.category, required this.goal, required this.unit, required this.frequency, required this.weekdays, required this.tags, required this.notes, required this.pinned, required this.active, this.delete = false});
   Habit makeHabit() => Habit(id: DateTime.now().microsecondsSinceEpoch.toString(), name: name, category: category, goal: goal, unit: unit, frequency: frequency, weekdays: weekdays, tags: tags, notes: notes, pinned: pinned, active: active);
 }
@@ -577,26 +635,68 @@ class HabitEditor extends StatefulWidget {
 }
 
 class _HabitEditorState extends State<HabitEditor> {
-  late TextEditingController name;
-  late TextEditingController category;
-  late TextEditingController goal;
-  late TextEditingController unit;
-  late TextEditingController tags;
-  late TextEditingController notes;
+  late TextEditingController name, category, goal, unit, tags, notes;
   String frequency = 'Every day';
-  List<int> weekdays = <int>[1, 2, 3, 4, 5, 6, 7];
-  bool pinned = false;
-  bool active = true;
-  @override void initState() { super.initState(); final h = widget.habit; name = TextEditingController(text: h?.name ?? ''); category = TextEditingController(text: h?.category ?? 'Daily'); goal = TextEditingController(text: '${h?.goal ?? 1}'); unit = TextEditingController(text: h?.unit ?? 'times'); tags = TextEditingController(text: h?.tags.join(', ') ?? ''); notes = TextEditingController(text: h?.notes ?? ''); frequency = h?.frequency ?? 'Every day'; weekdays = List<int>.from(h?.weekdays ?? weekdays); pinned = h?.pinned ?? false; active = h?.active ?? true; }
+  List<int> weekdays = [1, 2, 3, 4, 5, 6, 7];
+  bool pinned = false, active = true;
+  @override
+  void initState() {
+    super.initState();
+    final h = widget.habit;
+    name = TextEditingController(text: h?.name ?? '');
+    category = TextEditingController(text: h?.category ?? 'Daily');
+    goal = TextEditingController(text: '${h?.goal ?? 1}');
+    unit = TextEditingController(text: h?.unit ?? 'times');
+    tags = TextEditingController(text: h?.tags.join(', ') ?? '');
+    notes = TextEditingController(text: h?.notes ?? '');
+    frequency = h?.frequency ?? 'Every day';
+    weekdays = List<int>.from(h?.weekdays ?? weekdays);
+    pinned = h?.pinned ?? false;
+    active = h?.active ?? true;
+  }
   @override void dispose() { name.dispose(); category.dispose(); goal.dispose(); unit.dispose(); tags.dispose(); notes.dispose(); super.dispose(); }
-  void save() { final n = int.tryParse(goal.text) ?? 1; final tagList = tags.text.split(',').map((x) => x.trim()).where((x) => x.isNotEmpty).toList(); Navigator.pop(context, HabitForm(name: name.text, category: category.text, goal: n.clamp(1, 1000000).toInt(), unit: unit.text, frequency: frequency, weekdays: weekdays, tags: tagList, notes: notes.text, pinned: pinned, active: active)); }
-  void remove() { Navigator.pop(context, HabitForm(name: name.text, category: category.text, goal: 1, unit: unit.text, frequency: frequency, weekdays: weekdays, tags: <String>[], notes: '', pinned: false, active: false, delete: true)); }
-  @override Widget build(BuildContext context) { return Padding(padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom), child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(children: <Widget>[Text(widget.habit == null ? 'New habit' : 'Edit habit', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), const SizedBox(height: 14), TextField(controller: name, decoration: const InputDecoration(labelText: 'Habit name')), const SizedBox(height: 10), TextField(controller: category, decoration: const InputDecoration(labelText: 'Category')), const SizedBox(height: 10), Row(children: <Widget>[Expanded(child: TextField(controller: goal, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Goal'))), const SizedBox(width: 10), Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: 'Unit')))]), const SizedBox(height: 10), DropdownButtonFormField<String>(value: frequency, items: const <String>['Every day', 'Weekdays', 'Custom days'].map((x) => DropdownMenuItem<String>(value: x, child: Text(x))).toList(), onChanged: (x) => setState(() => frequency = x ?? 'Every day'), decoration: const InputDecoration(labelText: 'Frequency')), if (frequency == 'Custom days') Wrap(children: List<Widget>.generate(7, (i) => FilterChip(label: Text(<String>['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]), selected: weekdays.contains(i + 1), onSelected: (v) => setState(() { if (v) { if (!weekdays.contains(i + 1)) weekdays.add(i + 1); } else { weekdays.remove(i + 1); } })) )), const SizedBox(height: 10), TextField(controller: tags, decoration: const InputDecoration(labelText: 'Tags (comma separated)')), const SizedBox(height: 10), TextField(controller: notes, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes')), SwitchListTile(value: pinned, onChanged: (v) => setState(() => pinned = v), title: const Text('Pin habit')), SwitchListTile(value: active, onChanged: (v) => setState(() => active = v), title: const Text('Active')), Row(children: <Widget>[if (widget.habit != null) TextButton(onPressed: remove, child: const Text('Delete')), const Spacer(), FilledButton(onPressed: save, child: const Text('Save'))])])); }
+  void save() {
+    final n = int.tryParse(goal.text) ?? 1;
+    final tagList = tags.text.split(',').map((x) => x.trim()).where((x) => x.isNotEmpty).toList();
+    Navigator.pop(context, HabitForm(name: name.text, category: category.text, goal: n.clamp(1, 1000000).toInt(), unit: unit.text, frequency: frequency, weekdays: weekdays, tags: tagList, notes: notes.text, pinned: pinned, active: active));
+  }
+  void remove() { Navigator.pop(context, HabitForm(name: name.text, category: category.text, goal: 1, unit: unit.text, frequency: frequency, weekdays: weekdays, tags: [], notes: '', pinned: false, active: false, delete: true)); }
+  @override
+  Widget build(BuildContext context) {
+    final frequencyItems = <DropdownMenuItem<String>>[];
+    for (final x in ['Every day', 'Weekdays', 'Custom days']) frequencyItems.add(DropdownMenuItem<String>(value: x, child: Text(x)));
+    final dayWidgets = <Widget>[];
+    if (frequency == 'Custom days') {
+      final labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+      for (var i = 0; i < 7; i++) {
+        final day = i + 1;
+        dayWidgets.add(FilterChip(label: Text(labels[i]), selected: weekdays.contains(day), onSelected: (v) => setState(() { if (v) { if (!weekdays.contains(day)) weekdays.add(day); } else { weekdays.remove(day); } })));
+      }
+    }
+    return Padding(padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom), child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(children: [
+      Text(widget.habit == null ? 'New habit' : 'Edit habit', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 14),
+      TextField(controller: name, decoration: const InputDecoration(labelText: 'Habit name')),
+      const SizedBox(height: 10),
+      TextField(controller: category, decoration: const InputDecoration(labelText: 'Category')),
+      const SizedBox(height: 10),
+      Row(children: [Expanded(child: TextField(controller: goal, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Goal'))), const SizedBox(width: 10), Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: 'Unit')))]),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<String>(value: frequency, items: frequencyItems, onChanged: (x) => setState(() => frequency = x ?? 'Every day'), decoration: const InputDecoration(labelText: 'Frequency')),
+      if (dayWidgets.isNotEmpty) Wrap(spacing: 4, children: dayWidgets),
+      const SizedBox(height: 10),
+      TextField(controller: tags, decoration: const InputDecoration(labelText: 'Tags, comma separated')),
+      const SizedBox(height: 10),
+      TextField(controller: notes, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes')),
+      SwitchListTile(value: pinned, onChanged: (v) => setState(() => pinned = v), title: const Text('Pin habit')),
+      SwitchListTile(value: active, onChanged: (v) => setState(() => active = v), title: const Text('Active')),
+      Row(children: [if (widget.habit != null) TextButton(onPressed: remove, child: const Text('Delete')), const Spacer(), FilledButton(onPressed: save, child: const Text('Save'))]),
+    ])));
+  }
 }
 
 class TodoForm {
-  final String title;
-  final String category;
+  final String title, category;
   final int priority;
   const TodoForm({required this.title, required this.category, required this.priority});
 }
@@ -606,13 +706,16 @@ class TodoEditor extends StatefulWidget {
   const TodoEditor({super.key, this.existing});
   @override State<TodoEditor> createState() => _TodoEditorState();
 }
+
 class _TodoEditorState extends State<TodoEditor> {
-  late TextEditingController title;
-  late TextEditingController category;
+  late TextEditingController title, category;
   int priority = 1;
   @override void initState() { super.initState(); title = TextEditingController(text: '${widget.existing?['title'] ?? ''}'); category = TextEditingController(text: '${widget.existing?['category'] ?? 'General'}'); priority = (widget.existing?['priority'] as num?)?.toInt() ?? 1; }
   @override void dispose() { title.dispose(); category.dispose(); super.dispose(); }
-  @override Widget build(BuildContext context) => AlertDialog(title: Text(widget.existing == null ? 'Add task' : 'Edit task'), content: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[TextField(controller: title, decoration: const InputDecoration(labelText: 'Task')), const SizedBox(height: 10), TextField(controller: category, decoration: const InputDecoration(labelText: 'Category')), const SizedBox(height: 10), DropdownButtonFormField<int>(value: priority, items: const <DropdownMenuItem<int>>[DropdownMenuItem(value: 1, child: Text('Low')), DropdownMenuItem(value: 2, child: Text('Medium')), DropdownMenuItem(value: 3, child: Text('High'))], onChanged: (v) => setState(() => priority = v ?? 1))]), actions: <Widget>[TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, TodoForm(title: title.text, category: category.text, priority: priority)), child: const Text('Save'))]);
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(title: Text(widget.existing == null ? 'Add task' : 'Edit task'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: title, decoration: const InputDecoration(labelText: 'Task')), const SizedBox(height: 10), TextField(controller: category, decoration: const InputDecoration(labelText: 'Category')), const SizedBox(height: 10), DropdownButtonFormField<int>(value: priority, items: const [DropdownMenuItem(value: 1, child: Text('Low')), DropdownMenuItem(value: 2, child: Text('Medium')), DropdownMenuItem(value: 3, child: Text('High'))], onChanged: (v) => setState(() => priority = v ?? 1))]), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, TodoForm(title: title.text, category: category.text, priority: priority)), child: const Text('Save'))]);
+  }
 }
 
 class FocusTimer extends StatefulWidget {
@@ -626,8 +729,16 @@ class _FocusTimerState extends State<FocusTimer> {
   bool running = false;
   @override void initState() { super.initState(); seconds = widget.initial; }
   @override void dispose() { timer?.cancel(); super.dispose(); }
-  void toggle() { if (running) { timer?.cancel(); } else { timer = Timer.periodic(const Duration(seconds: 1), (_) { if (mounted) setState(() => seconds++); }); } setState(() => running = !running); }
-  @override Widget build(BuildContext context) { final minutes = seconds ~/ 60; final secs = seconds % 60; return Scaffold(appBar: AppBar(title: const Text('Focus timer')), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: <Widget>[Text('${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 54, fontWeight: FontWeight.w900)), const SizedBox(height: 25), FilledButton.icon(onPressed: toggle, icon: Icon(running ? Icons.pause : Icons.play_arrow), label: Text(running ? 'Pause' : 'Start')), const SizedBox(height: 10), TextButton(onPressed: () => Navigator.pop(context, seconds), child: const Text('Save and close'))]))); }
+  void toggle() {
+    if (running) { timer?.cancel(); } else { timer = Timer.periodic(const Duration(seconds: 1), (_) { if (mounted) setState(() => seconds++); }); }
+    setState(() => running = !running);
+  }
+  @override
+  Widget build(BuildContext context) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return Scaffold(appBar: AppBar(title: const Text('Focus timer')), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text('${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 54, fontWeight: FontWeight.w900)), const SizedBox(height: 25), FilledButton.icon(onPressed: toggle, icon: Icon(running ? Icons.pause : Icons.play_arrow), label: Text(running ? 'Pause' : 'Start')), const SizedBox(height: 10), TextButton(onPressed: () => Navigator.pop(context, seconds), child: const Text('Save and close'))])));
+  }
 }
 
 class MeasurementDialog extends StatefulWidget {
@@ -637,7 +748,7 @@ class MeasurementDialog extends StatefulWidget {
 class _MeasurementDialogState extends State<MeasurementDialog> {
   final controller = TextEditingController();
   @override void dispose() { controller.dispose(); super.dispose(); }
-  @override Widget build(BuildContext context) => AlertDialog(title: const Text('Add measurement'), content: TextField(controller: controller, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Value')), actions: <Widget>[TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, double.tryParse(controller.text)), child: const Text('Save'))]);
+  @override Widget build(BuildContext context) => AlertDialog(title: const Text('Add measurement'), content: TextField(controller: controller, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Value')), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, double.tryParse(controller.text)), child: const Text('Save'))]);
 }
 
 class PinDialog extends StatefulWidget {
@@ -647,7 +758,7 @@ class PinDialog extends StatefulWidget {
 class _PinDialogState extends State<PinDialog> {
   final controller = TextEditingController();
   @override void dispose() { controller.dispose(); super.dispose(); }
-  @override Widget build(BuildContext context) => AlertDialog(title: const Text('Set app PIN'), content: TextField(controller: controller, obscureText: true, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'PIN')), actions: <Widget>[TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save'))]);
+  @override Widget build(BuildContext context) => AlertDialog(title: const Text('Set app PIN'), content: TextField(controller: controller, obscureText: true, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'PIN')), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save'))]);
 }
 
 class LockDialog extends StatefulWidget {
@@ -659,11 +770,11 @@ class _LockDialogState extends State<LockDialog> {
   final controller = TextEditingController();
   String error = '';
   @override void dispose() { controller.dispose(); super.dispose(); }
-  @override Widget build(BuildContext context) => AlertDialog(title: const Text('Unlock Habit Tracker'), content: TextField(controller: controller, obscureText: true, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'PIN', errorText: error.isEmpty ? null : error)), actions: <Widget>[FilledButton(onPressed: () { if (controller.text == widget.pin) { Navigator.pop(context, true); } else { setState(() => error = 'Incorrect PIN'); } }, child: const Text('Unlock'))]);
+  @override Widget build(BuildContext context) => AlertDialog(title: const Text('Unlock Habit Tracker'), content: TextField(controller: controller, obscureText: true, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'PIN', errorText: error.isEmpty ? null : error)), actions: [FilledButton(onPressed: () { if (controller.text == widget.pin) { Navigator.pop(context, true); } else { setState(() => error = 'Incorrect PIN'); } }, child: const Text('Unlock'))]);
 }
 
 class LockScreen extends StatelessWidget {
   final VoidCallback onUnlock;
   const LockScreen({super.key, required this.onUnlock});
-  @override Widget build(BuildContext context) => Scaffold(body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: <Widget>[const Icon(Icons.lock_outline, size: 70, color: AppColors.blue), const SizedBox(height: 15), const Text('Habit Tracker is locked', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), const SizedBox(height: 20), FilledButton(onPressed: onUnlock, child: const Text('Unlock'))])));
+  @override Widget build(BuildContext context) => Scaffold(body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.lock_outline, size: 70, color: AppColors.blue), const SizedBox(height: 15), const Text('Habit Tracker is locked', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), const SizedBox(height: 20), FilledButton(onPressed: onUnlock, child: const Text('Unlock'))])));
 }
