@@ -49,23 +49,40 @@ class NotificationService {
       scheduled = scheduled.add(const Duration(days: 1));
     }
 
-    await _plugin.zonedSchedule(
-      id,
-      'Habit reminder 🔔',
-      'Time for: $habitName',
-      scheduled,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'habit_reminders',
-          'Habit reminders',
-          channelDescription: 'Daily reminders for your habits',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'habit_reminders',
+        'Habit reminders',
+        channelDescription: 'Daily reminders for your habits',
+        importance: Importance.high,
+        priority: Priority.high,
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
     );
+
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        'Habit reminder 🔔',
+        'Time for: $habitName',
+        scheduled,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    } catch (_) {
+      // Android 12+ can block exact alarms unless the user grants the
+      // special Alarms & reminders access. Fall back to an inexact alarm so
+      // the habit reminder still works without that special access.
+      await _plugin.zonedSchedule(
+        id,
+        'Habit reminder 🔔',
+        'Time for: $habitName',
+        scheduled,
+        details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    }
   }
 
   Future<void> cancel(int id) async {
