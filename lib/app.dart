@@ -12,77 +12,753 @@ class AppColors {
   static const muted = Color(0xFF718096);
   static const border = Color(0xFFE6EAF0);
   static const green = Color(0xFF16A36A);
-  static const red = Color(0xFFE05252);
   static const amber = Color(0xFFF59E0B);
+  static const red = Color(0xFFE05252);
 }
 
 class HabitApp extends StatelessWidget {
   const HabitApp({super.key});
-  @override Widget build(BuildContext context) => MaterialApp(debugShowCheckedModeBanner:false,title:'Habit Tracker',theme:ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:AppColors.blue),scaffoldBackgroundColor:AppColors.bg),home:const HomeShell());
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Habit Tracker',
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.blue),
+        scaffoldBackgroundColor: AppColors.bg,
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+        ),
+      ),
+      home: const HomeShell(),
+    );
+  }
 }
 
-class HomeShell extends StatefulWidget { const HomeShell({super.key}); @override State<HomeShell> createState()=>_HomeShellState(); }
-class _HomeShellState extends State<HomeShell>{
-  final store=StorageService(); List<Habit> habits=[]; List<Map<String,dynamic>> todos=[]; Map<String,int> moods={}; Map<String,int> focus={}; DateTime selected=DateTime.now(); int tab=0; bool loading=true; String? pin; bool locked=false;
-  @override void initState(){super.initState();load();}
-  Future<void> load()async{habits=await store.loadHabits();todos=await store.loadTodos();moods=await store.loadMoods();focus=await store.loadTimerSeconds();pin=await store.loadPin();locked=pin!=null&&pin!.isNotEmpty;if(mounted)setState(()=>loading=false);}
-  Future<void> saveHabits()=>store.saveHabits(habits);
-  Future<void> addHabit()async{final r=await showModalBottomSheet<HabitEdit>(context:context,isScrollControlled:true,builder:(_)=>const HabitEditor());if(!mounted||r==null||r.name.trim().isEmpty)return;setState(()=>habits.add(r.toHabit()));await saveHabits();}
-  Future<void> editHabit(Habit h)async{final r=await showModalBottomSheet<HabitEdit>(context:context,isScrollControlled:true,builder:(_)=>HabitEditor(habit:h));if(!mounted||r==null)return;if(r.delete){setState(()=>habits.removeWhere((x)=>x.id==h.id));}else{h.name=r.name;h.category=r.category;h.goal=r.goal;h.unit=r.unit;h.frequency=r.frequency;h.weekdays=r.weekdays;h.pinned=r.pinned;h.active=r.active;h.tags=r.tags;h.notes=r.notes;setState((){});}await saveHabits();}
-  Future<void> toggleHabit(Habit h,DateTime d)async{setState(()=>h.setDone(d,!h.isDone(d)));await saveHabits();}
-  Future<void> openHabit(Habit h)async{await Navigator.push(context,MaterialPageRoute(builder:(_)=>HabitDetail(habit:h,onChanged:saveHabits)));if(mounted)setState((){});}
-  Future<void> addTodo()async{final r=await showDialog<TodoEdit>(context:context,builder:(_)=>const TodoEditor());if(!mounted||r==null||r.title.trim().isEmpty)return;setState(()=>todos.add({'id':DateTime.now().microsecondsSinceEpoch.toString(),'title':r.title.trim(),'done':false,'priority':r.priority,'category':r.category,'due':r.due==null?'':Habit.key(r.due!)}));await store.saveTodos(todos);}
-  Future<void> editTodo(int i)async{final r=await showDialog<TodoEdit>(context:context,builder:(_)=>TodoEditor(existing:todos[i]));if(!mounted||r==null)return;setState((){todos[i]['title']=r.title.trim();todos[i]['priority']=r.priority;todos[i]['category']=r.category;todos[i]['due']=r.due==null?'':Habit.key(r.due!);});await store.saveTodos(todos);}
-  Future<void> toggleTodo(int i)async{setState(()=>todos[i]['done']=todos[i]['done']!=true);await store.saveTodos(todos);}
-  Future<void> deleteTodo(int i)async{setState(()=>todos.removeAt(i));await store.saveTodos(todos);}
-  Future<void> openTimer()async{await Navigator.push(context,MaterialPageRoute(builder:(_)=>FocusTimer(storage:store,date:selected,initial:focus[Habit.key(selected)]??0,onSaved:(v)=>setState(()=>focus[Habit.key(selected)]=v))));}
-  Future<void> setPin()async{final r=await showDialog<String>(context:context,builder:(_)=>PinDialog(current:pin));if(r==null)return;await store.savePin(r);if(mounted)setState(()=>pin=r.isEmpty?null:r);}
-  Future<void> unlock()async{final ok=await showDialog<bool>(context:context,barrierDismissible:false,builder:(_)=>LockDialog(pin:pin!));if(ok==true&&mounted)setState(()=>locked=false);}
-  @override Widget build(BuildContext context){if(loading)return const Scaffold(body:Center(child:CircularProgressIndicator()));if(locked&&pin!=null)return LockScreen(onUnlock:unlock);final pages=<Widget>[Dashboard(habits:habits,moods:moods,date:selected,onAdd:addHabit,onTimer:openTimer,onToggle:toggleHabit,onOpen:openHabit,onEdit:editHabit,onMood:(v)async{setState(()=>moods[Habit.key(selected)]=v);await store.saveMoods(moods);}),Daily(habits:habits,date:selected,onDate:(d)=>setState(()=>selected=d),onAdd:addHabit,onToggle:toggleHabit,onOpen:openHabit,onEdit:editHabit),Stats(habits:habits,moods:moods,todos:todos,focus:focus,onOpen:openHabit),TodoPage(todos:todos,onAdd:addTodo,onEdit:editTodo,onToggle:toggleTodo,onDelete:deleteTodo),Profile(habits:habits,onTimer:openTimer,onPin:setPin,hasPin:pin!=null)];return Scaffold(body:SafeArea(child:IndexedStack(index:tab,children:pages)),bottomNavigationBar:NavigationBar(selectedIndex:tab,indicatorColor:AppColors.soft,onDestinationSelected:(v)=>setState(()=>tab=v),destinations:const[NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home),label:'Home'),NavigationDestination(icon:Icon(Icons.check_circle_outline),selectedIcon:Icon(Icons.check_circle),label:'Habits'),NavigationDestination(icon:Icon(Icons.insights_outlined),selectedIcon:Icon(Icons.insights),label:'Stats'),NavigationDestination(icon:Icon(Icons.list_alt_outlined),selectedIcon:Icon(Icons.list_alt),label:'To-Do'),NavigationDestination(icon:Icon(Icons.person_outline),selectedIcon:Icon(Icons.person),label:'Profile')]));}
+class HomeShell extends StatefulWidget {
+  const HomeShell({super.key});
+  @override State<HomeShell> createState() => _HomeShellState();
 }
 
-class PageHeader extends StatelessWidget{final String title,subtitle;final Widget? action;const PageHeader({super.key,required this.title,required this.subtitle,this.action});@override Widget build(BuildContext context)=>Padding(padding:const EdgeInsets.fromLTRB(20,18,20,14),child:Row(children:[Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:28,fontWeight:FontWeight.w900,color:AppColors.text)),Text(subtitle,style:const TextStyle(color:AppColors.muted))])),if(action!=null)action!]));}
-class CardBox extends StatelessWidget{final Widget child;final EdgeInsetsGeometry padding;const CardBox({super.key,required this.child,this.padding=const EdgeInsets.all(18)});@override Widget build(BuildContext context)=>Container(padding:padding,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(20),border:Border.all(color:AppColors.border)),child:child);}
-class SectionTitle extends StatelessWidget{final String title,label;final VoidCallback? onAdd;const SectionTitle({super.key,required this.title,this.onAdd,this.label='Add'});@override Widget build(BuildContext context)=>Padding(padding:const EdgeInsets.fromLTRB(20,18,20,10),child:Row(children:[Expanded(child:Text(title,style:const TextStyle(fontSize:19,fontWeight:FontWeight.w900))),if(onAdd!=null)TextButton(onPressed:onAdd,child:Text(label))]));}
-class MiniStat extends StatelessWidget{final String value,label;final IconData icon;const MiniStat({super.key,required this.value,required this.label,required this.icon});@override Widget build(BuildContext context)=>CardBox(padding:const EdgeInsets.all(14),child:Row(children:[Icon(icon,color:AppColors.blue),const SizedBox(width:9),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(value,style:const TextStyle(fontSize:18,fontWeight:FontWeight.w900)),Text(label,style:const TextStyle(fontSize:11,color:AppColors.muted))]))]));}
+class _HomeShellState extends State<HomeShell> {
+  final store = StorageService();
+  List<Habit> habits = [];
+  List<Map<String, dynamic>> todos = [];
+  Map<String, int> moods = {};
+  Map<String, int> focus = {};
+  int tab = 0;
+  DateTime selected = DateTime.now();
+  bool loading = true;
+  String? pin;
+  bool locked = false;
 
-class Dashboard extends StatefulWidget{final List<Habit> habits;final Map<String,int> moods;final DateTime date;final VoidCallback onAdd,onTimer;final Future<void> Function(Habit,DateTime) onToggle;final Future<void> Function(Habit) onOpen,onEdit;final Future<void> Function(int) onMood;const Dashboard({super.key,required this.habits,required this.moods,required this.date,required this.onAdd,required this.onTimer,required this.onToggle,required this.onOpen,required this.onEdit,required this.onMood});@override State<Dashboard> createState()=>_DashboardState();}
-class _DashboardState extends State<Dashboard>{String search='';String filter='All';@override Widget build(BuildContext context){final active=widget.habits.where((h)=>h.active).toList();final visible=active.where((h){final q=search.toLowerCase();final match=q.isEmpty||h.name.toLowerCase().contains(q)||h.category.toLowerCase().contains(q)||h.tags.any((t)=>t.toLowerCase().contains(q));final f=filter=='All'||(filter=='Pinned'&&h.pinned)||(filter=='Completed'&&h.isDone(widget.date))||(filter=='Missed'&&h.isScheduled(widget.date)&&!h.isDone(widget.date));return match&&f;}).toList()..sort((a,b)=>a.pinned==b.pinned?0:(a.pinned?-1:1));final scheduled=active.where((h)=>h.isScheduled(widget.date)).toList();final done=scheduled.where((h)=>h.isDone(widget.date)).length;final progress=scheduled.isEmpty?0.0:done/scheduled.length;final streak=active.fold<int>(0,(m,h){final v=h.currentStreak(widget.date);return v>m?v:m;});return SingleChildScrollView(padding:const EdgeInsets.only(bottom:28),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[PageHeader(title:'Good day 👋',subtitle:DateFormat('EEEE, d MMMM').format(widget.date),action:IconButton(onPressed:widget.onTimer,icon:const Icon(Icons.timer_outlined))),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:TextField(onChanged:(v)=>setState(()=>search=v),decoration:const InputDecoration(prefixIcon:Icon(Icons.search),hintText:'Search habits or tags'))),SizedBox(height:48,child:ListView(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:20),children:['All','Pinned','Completed','Missed'].map((x)=>Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(x),selected:filter==x,onSelected:(_)=>setState(()=>filter=x)))).toList())),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:Row(children:[SizedBox(width:84,height:84,child:Stack(fit:StackFit.expand,children:[CircularProgressIndicator(value:progress,strokeWidth:9,backgroundColor:AppColors.soft,color:AppColors.blue),Center(child:Text('${(progress*100).round()}%',style:const TextStyle(fontWeight:FontWeight.w900)))])),const SizedBox(width:18),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text("Today's progress",style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),Text('$done of ${scheduled.length} scheduled',style:const TextStyle(color:AppColors.muted)),const SizedBox(height:8),LinearProgressIndicator(value:progress,backgroundColor:AppColors.soft)]))]))),Padding(padding:const EdgeInsets.fromLTRB(20,14,20,0),child:Row(children:[Expanded(child:MiniStat(value:'$streak',label:'Current streak',icon:Icons.local_fire_department_outlined)),const SizedBox(width:10),Expanded(child:MiniStat(value:'${active.length}',label:'Active habits',icon:Icons.checklist_outlined))])),SectionTitle(title:"Today's habits",onAdd:widget.onAdd,label:'＋ Add'),if(visible.isEmpty)const Padding(padding:EdgeInsets.all(30),child:Center(child:Text('No matching habits.',style:TextStyle(color:AppColors.muted))))else...visible.map((h)=>Padding(padding:const EdgeInsets.symmetric(horizontal:20,vertical:5),child:HabitTile(habit:h,date:widget.date,onToggle:()=>widget.onToggle(h,widget.date),onOpen:()=>widget.onOpen(h),onEdit:()=>widget.onEdit(h)))),SectionTitle(title:'How are you feeling?'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:Row(mainAxisAlignment:MainAxisAlignment.spaceAround,children:List.generate(5,(i){final v=i+1;return InkWell(onTap:()=>widget.onMood(v),child:Text(['😫','😕','😐','🙂','😄'][i],style:TextStyle(fontSize:28,decoration:widget.moods[Habit.key(widget.date)]==v?TextDecoration.underline:null)));}))))]));}}
-class HabitTile extends StatelessWidget{final Habit habit;final DateTime date;final VoidCallback onToggle,onOpen,onEdit;const HabitTile({super.key,required this.habit,required this.date,required this.onToggle,required this.onOpen,required this.onEdit});@override Widget build(BuildContext context){final done=habit.isDone(date);return GestureDetector(onTap:onOpen,onLongPress:onEdit,child:CardBox(child:Row(children:[GestureDetector(onTap:onToggle,child:CircleAvatar(radius:21,backgroundColor:done?AppColors.blue:AppColors.soft,child:Icon(done?Icons.check:Icons.circle_outlined,color:done?Colors.white:AppColors.blue))),const SizedBox(width:13),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[Expanded(child:Text(habit.name,style:TextStyle(fontWeight:FontWeight.w900,decoration:done?TextDecoration.lineThrough:null))),if(habit.pinned)const Icon(Icons.push_pin,size:15,color:AppColors.blue)]),Text('${habit.category} · ${habit.goal} ${habit.unit} · 🔥 ${habit.currentStreak(date)}',style:const TextStyle(color:AppColors.muted,fontSize:12))]))])));}}
+  @override
+  void initState() { super.initState(); _load(); }
 
-class Daily extends StatelessWidget{final List<Habit> habits;final DateTime date;final ValueChanged<DateTime> onDate;final VoidCallback onAdd;final Future<void> Function(Habit,DateTime) onToggle;final Future<void> Function(Habit) onOpen,onEdit;const Daily({super.key,required this.habits,required this.date,required this.onDate,required this.onAdd,required this.onToggle,required this.onOpen,required this.onEdit});@override Widget build(BuildContext context){final days=DateTime(date.year,date.month+1,0).day;final active=habits.where((h)=>h.active&&h.isScheduled(date)).toList();final done=active.where((h)=>h.isDone(date)).length;return Column(children:[PageHeader(title:'Daily',subtitle:DateFormat('MMMM yyyy').format(date)),SizedBox(height:80,child:ListView.separated(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:20),itemCount:days,separatorBuilder:(_,__)=>const SizedBox(width:7),itemBuilder:(_,i){final d=DateTime(date.year,date.month,i+1);final selected=Habit.key(d)==Habit.key(date);return InkWell(onTap:()=>onDate(d),child:Container(width:48,padding:const EdgeInsets.all(8),decoration:BoxDecoration(color:selected?AppColors.blue:Colors.white,borderRadius:BorderRadius.circular(15),border:Border.all(color:AppColors.border)),child:Column(children:[Text(DateFormat('E').format(d).substring(0,1),style:TextStyle(color:selected?Colors.white:AppColors.muted)),Text('${d.day}',style:TextStyle(fontWeight:FontWeight.w900,color:selected?Colors.white:AppColors.text))])));}),),SectionTitle(title:'$done/${active.length} complete',onAdd:onAdd,label:'＋ Add'),Expanded(child:active.isEmpty?const Center(child:Text('No habits scheduled today.',style:TextStyle(color:AppColors.muted))):ListView(children:active.map((h)=>Padding(padding:const EdgeInsets.symmetric(horizontal:20,vertical:5),child:HabitTile(habit:h,date:date,onToggle:()=>onToggle(h,date),onOpen:()=>onOpen(h),onEdit:()=>onEdit(h)))).toList()))]);}}
+  Future<void> _load() async {
+    habits = await store.loadHabits();
+    todos = await store.loadTodos();
+    moods = await store.loadMoods();
+    focus = await store.loadTimerSeconds();
+    pin = await store.loadPin();
+    locked = pin != null && pin!.isNotEmpty;
+    if (mounted) setState(() => loading = false);
+  }
 
-class Stats extends StatefulWidget{final List<Habit> habits;final Map<String,int> moods;final List<Map<String,dynamic>> todos;final Map<String,int> focus;final Future<void> Function(Habit) onOpen;const Stats({super.key,required this.habits,required this.moods,required this.todos,required this.focus,required this.onOpen});@override State<Stats> createState()=>_StatsState();}
-class _StatsState extends State<Stats>{String range='30D';int year=DateTime.now().year;String selectedHabit='All habits';int rangeDays()=>range=='7D'?7:range=='90D'?90:range=='1Y'?365:30;double rate(DateTime start,DateTime end){var d=0,t=0;for(final h in widget.habits.where((x)=>x.active)){for(var day=start;!day.isAfter(end);day=day.add(const Duration(days:1))){if(h.isScheduled(day)){t++;if(h.isDone(day))d++;}}}return t==0?0:d/t;}int count(DateTime start,DateTime end){var n=0;for(final h in widget.habits.where((x)=>x.active)){for(var day=start;!day.isAfter(end);day=day.add(const Duration(days:1))){if(h.isDone(day))n++;}}return n;}@override Widget build(BuildContext context){final now=DateTime.now();final start=now.subtract(Duration(days:rangeDays()-1));final r=rate(start,now);final total=count(start,now);final current=widget.habits.fold<int>(0,(m,h)=>h.currentStreak()>m?h.currentStreak():m);final best=widget.habits.fold<int>(0,(m,h)=>h.bestStreak()>m?h.bestStreak():m);final names=<String>['All habits',...widget.habits.map((h)=>h.name)];if(!names.contains(selectedHabit))selectedHabit='All habits';return SingleChildScrollView(padding:const EdgeInsets.only(bottom:30),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[PageHeader(title:'Analytics',subtitle:'Your habit history and patterns'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:Wrap(spacing:7,children:['7D','30D','90D','1Y'].map((x)=>ChoiceChip(label:Text(x),selected:range==x,onSelected:(_)=>setState(()=>range=x))).toList())),Padding(padding:const EdgeInsets.fromLTRB(20,14,20,0),child:GridView.count(crossAxisCount:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisSpacing:10,mainAxisSpacing:10,childAspectRatio:1.7,children:[MiniStat(value:'${(r*100).round()}%',label:'Completion rate',icon:Icons.percent),MiniStat(value:'$current',label:'Current streak',icon:Icons.local_fire_department),MiniStat(value:'$best',label:'Best streak',icon:Icons.emoji_events_outlined),MiniStat(value:'$total',label:'Completions',icon:Icons.check_circle_outline)])),SectionTitle(title:'Completion trend'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:TrendChart(habits:widget.habits,days:rangeDays()))),SectionTitle(title:'Contribution activity'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[const Text('Activity heatmap',style:TextStyle(fontWeight:FontWeight.w900)),const Spacer(),Flexible(child:DropdownButton<String>(isExpanded:true,value:selectedHabit,items:names.toSet().map((x)=>DropdownMenuItem(value:x,child:Text(x,overflow:TextOverflow.ellipsis))).toList(),onChanged:(v){if(v!=null)setState(()=>selectedHabit=v);}))]),const SizedBox(height:8),SizedBox(height:132,child:ActivityHeatmap(habits:widget.habits,year:year,habitName:selectedHabit)),const SizedBox(height:8),Row(children:[const Text('Less',style:TextStyle(fontSize:11,color:AppColors.muted)),...List.generate(5,(i)=>Container(width:14,height:14,margin:const EdgeInsets.only(left:5),decoration:BoxDecoration(color:heatColor(i),borderRadius:BorderRadius.circular(3)))),const Text('  More',style:TextStyle(fontSize:11,color:AppColors.muted))])])),SectionTitle(title:'Day-of-week consistency'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:WeekdayAnalysis(habits:widget.habits))),SectionTitle(title:'Habit performance'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:Column(children:widget.habits.where((h)=>h.active).map((h){final p=h.completionRate(now);return ListTile(contentPadding:EdgeInsets.zero,onTap:()=>widget.onOpen(h),title:Text(h.name,style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:LinearProgressIndicator(value:p.clamp(0.0,1.0).toDouble(),backgroundColor:AppColors.soft),trailing:Text('${(p*100).round()}%'));}).toList()))),SectionTitle(title:'Needs attention'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:NeedsAttention(habits:widget.habits))),SectionTitle(title:'Weekly review'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:WeeklyReview(habits:widget.habits,moods:widget.moods))),Padding(padding:const EdgeInsets.symmetric(horizontal:20,vertical:8),child:Row(children:[IconButton(onPressed:year>2020?()=>setState(()=>year--):null,icon:const Icon(Icons.chevron_left)),Expanded(child:Center(child:Text('$year heatmap',style:const TextStyle(fontWeight:FontWeight.w800)))),IconButton(onPressed:()=>setState(()=>year++),icon:const Icon(Icons.chevron_right))]))]));}}
-Color heatColor(int level){switch(level){case 1:return const Color(0xFFC6F6D5);case 2:return const Color(0xFF68D391);case 3:return const Color(0xFF2FAD62);case 4:return const Color(0xFF176B35);default:return const Color(0xFFEDF1F4);}}
-class ActivityHeatmap extends StatelessWidget{final List<Habit> habits;final int year;final String habitName;const ActivityHeatmap({super.key,required this.habits,required this.year,required this.habitName});@override Widget build(BuildContext context){Habit? target;for(final h in habits){if(h.name==habitName){target=h;break;}}final start0=DateTime(year,1,1);final start=start0.subtract(Duration(days:start0.weekday-1));final end=DateTime(year,12,31);final weeks=<Widget>[];var cursor=start;while(!cursor.isAfter(end)){final cells=<Widget>[];for(var r=0;r<7;r++){final d=cursor.add(Duration(days:r));var done=0,total=0;if(d.year==year){if(target==null){for(final h in habits.where((x)=>x.active)){if(h.isScheduled(d)){total++;if(h.isDone(d))done++;}}}else if(target.isScheduled(d)){total=1;if(target.isDone(d))done=1;}}final level=total==0?0:((done/total)*4).ceil().clamp(0,4).toInt();cells.add(Tooltip(message:'${DateFormat('d MMM yyyy').format(d)} · $done/$total',child:Container(width:11,height:11,margin:const EdgeInsets.only(bottom:3),decoration:BoxDecoration(color:heatColor(level),borderRadius:BorderRadius.circular(2)))));}weeks.add(Column(children:cells));cursor=cursor.add(const Duration(days:7));}return SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:weeks));}}
-class TrendChart extends StatelessWidget{final List<Habit> habits;final int days;const TrendChart({super.key,required this.habits,required this.days});@override Widget build(BuildContext context){final values=<double>[];final now=DateTime.now();for(var i=days-1;i>=0;i--){final d=now.subtract(Duration(days:i));var done=0,total=0;for(final h in habits.where((x)=>x.active)){if(h.isScheduled(d)){total++;if(h.isDone(d))done++;}}values.add(total==0?0:done/total);}return SizedBox(height:150,child:CustomPaint(painter:TrendPainter(values),child:const SizedBox.expand()));}}
-class TrendPainter extends CustomPainter{final List<double> values;TrendPainter(this.values);@override void paint(Canvas canvas,Size size){if(values.isEmpty)return;final p=Paint()..color=AppColors.blue..strokeWidth=3..style=PaintingStyle.stroke..strokeCap=StrokeCap.round;final fill=Paint()..color=AppColors.soft.withOpacity(.7)..style=PaintingStyle.fill;final path=Path();for(var i=0;i<values.length;i++){final double x=values.length==1?0:size.width*i/(values.length-1);final double y=size.height-20-values[i]*(size.height-45);if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}canvas.drawPath(path,p);final area=Path()..moveTo(0,size.height-20);for(var i=0;i<values.length;i++){final double x=values.length==1?0:size.width*i/(values.length-1);final double y=size.height-20-values[i]*(size.height-45);area.lineTo(x,y);}area.lineTo(size.width,size.height-20);area.close();canvas.drawPath(area,fill);}@override bool shouldRepaint(covariant TrendPainter oldDelegate)=>true;}
-class WeekdayAnalysis extends StatelessWidget{final List<Habit> habits;const WeekdayAnalysis({super.key,required this.habits});@override Widget build(BuildContext context){final rows=<Widget>[];for(var i=1;i<=7;i++){var done=0,total=0;for(var j=0;j<84;j++){final d=DateTime.now().subtract(Duration(days:j));if(d.weekday==i){for(final h in habits.where((x)=>x.active)){if(h.isScheduled(d)){total++;if(h.isDone(d))done++;}}}}final r=total==0?0.0:done/total;rows.add(Padding(padding:const EdgeInsets.symmetric(vertical:4),child:Row(children:[SizedBox(width:38,child:Text(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i-1],style:const TextStyle(fontSize:12))),Expanded(child:LinearProgressIndicator(value:r,minHeight:9,backgroundColor:AppColors.soft)),const SizedBox(width:8),SizedBox(width:38,child:Text('${(r*100).round()}%',textAlign:TextAlign.right,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:12)))])));}return Column(children:rows);}}
-class NeedsAttention extends StatelessWidget{final List<Habit> habits;const NeedsAttention({super.key,required this.habits});@override Widget build(BuildContext context){final now=DateTime.now();final items=habits.where((h)=>h.active&&h.totalCompletions()>0&&h.completionRate(now)<.6).toList();if(items.isEmpty)return const ListTile(contentPadding:EdgeInsets.zero,leading:Icon(Icons.check_circle,color:AppColors.green),title:Text('Everything is on track'),subtitle:Text('Keep your current rhythm going.'));return Column(children:items.take(4).map((h)=>ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.trending_down,color:AppColors.red),title:Text(h.name),subtitle:Text('${(h.completionRate(now)*100).round()}% this month')).toList());}}
-class WeeklyReview extends StatelessWidget{final List<Habit> habits;final Map<String,int> moods;const WeeklyReview({super.key,required this.habits,required this.moods});@override Widget build(BuildContext context){final now=DateTime.now();final start=now.subtract(const Duration(days:6));var done=0,total=0;for(final h in habits.where((x)=>x.active)){for(var d=start;!d.isAfter(now);d=d.add(const Duration(days:1))){if(h.isScheduled(d)){total++;if(h.isDone(d))done++;}}}final mood=moods[Habit.key(now)];return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('$done of $total scheduled completions this week',style:const TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:6),LinearProgressIndicator(value:total==0?0:done/total,backgroundColor:AppColors.soft),const SizedBox(height:8),Text(mood==null?'No mood logged today.':'Today\'s mood: ${['','😫','😕','😐','🙂','😄'][mood]}',style:const TextStyle(color:AppColors.muted))]);}}
+  Future<void> saveHabits() => store.saveHabits(habits);
 
-class TodoPage extends StatefulWidget{final List<Map<String,dynamic>> todos;final VoidCallback onAdd;final Future<void> Function(int) onEdit,onToggle,onDelete;const TodoPage({super.key,required this.todos,required this.onAdd,required this.onEdit,required this.onToggle,required this.onDelete});@override State<TodoPage> createState()=>_TodoPageState();}
-class _TodoPageState extends State<TodoPage>{String filter='All';String search='';@override Widget build(BuildContext context){final list=widget.todos.asMap().entries.where((e){final x=e.value;final q=search.toLowerCase();final match=q.isEmpty||'${x['title']}'.toLowerCase().contains(q)||'${x['category']}'.toLowerCase().contains(q);final f=filter=='All'||(filter=='Open'&&x['done']!=true)||(filter=='Completed'&&x['done']==true)||(filter=='High'&&x['priority']==3);return match&&f;}).toList();final done=widget.todos.where((x)=>x['done']==true).length;return Column(children:[PageHeader(title:'To-Do',subtitle:'$done completed · ${widget.todos.length-done} remaining',action:IconButton(onPressed:widget.onAdd,icon:const Icon(Icons.add))),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:TextField(onChanged:(v)=>setState(()=>search=v),decoration:const InputDecoration(prefixIcon:Icon(Icons.search),hintText:'Search tasks'))),SizedBox(height:48,child:ListView(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:20),children:['All','Open','Completed','High'].map((x)=>Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(x),selected:filter==x,onSelected:(_)=>setState(()=>filter=x)))).toList())),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:Column(children:[LinearProgressIndicator(value:widget.todos.isEmpty?0:done/widget.todos.length,backgroundColor:AppColors.soft),const SizedBox(height:8),Text(widget.todos.isEmpty?'No tasks yet':'$done of ${widget.todos.length} complete')]))),Expanded(child:list.isEmpty?const Center(child:Text('No tasks match your filter.',style:TextStyle(color:AppColors.muted))):ListView.builder(padding:const EdgeInsets.all(20),itemCount:list.length,itemBuilder:(context,i){final e=list[i];final x=e.value;return Dismissible(key:ValueKey(x['id']),background:Container(color:AppColors.red,alignment:Alignment.centerLeft,padding:const EdgeInsets.only(left:20),child:const Icon(Icons.delete,color:Colors.white)),onDismissed:(_)=>widget.onDelete(e.key),child:Card(child:ListTile(onTap:()=>widget.onEdit(e.key),leading:Checkbox(value:x['done']==true,onChanged:(_)=>widget.onToggle(e.key)),title:Text('${x['title']}',style:TextStyle(fontWeight:FontWeight.w800,decoration:x['done']==true?TextDecoration.lineThrough:null)),subtitle:Text('${x['category']??'General'} · ${priorityName((x['priority'] as num?)?.toInt()??1)}'),trailing:const Icon(Icons.edit_outlined,size:18))));})]);}}
-class Profile extends StatelessWidget{final List<Habit> habits;final VoidCallback onTimer,onPin;final bool hasPin;const Profile({super.key,required this.habits,required this.onTimer,required this.onPin,required this.hasPin});@override Widget build(BuildContext context){final total=habits.fold<int>(0,(s,h)=>s+h.totalCompletions());final best=habits.fold<int>(0,(m,h)=>h.bestStreak()>m?h.bestStreak():m);return SingleChildScrollView(padding:const EdgeInsets.only(bottom:30),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const PageHeader(title:'Profile',subtitle:'Private offline habit tracking'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:Row(children:[const CircleAvatar(radius:34,child:Icon(Icons.person)),const SizedBox(width:15),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('${habits.length} habits',style:const TextStyle(fontSize:20,fontWeight:FontWeight.w900)),Text('$total completions · $best best streak',style:const TextStyle(color:AppColors.muted))]))]))),SectionTitle(title:'Achievements'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:Text('${achievementCount(habits)} achievements unlocked',style:const TextStyle(fontWeight:FontWeight.w800)))),SectionTitle(title:'Tools'),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:Column(children:[ListTile(onTap:onTimer,leading:const Icon(Icons.timer_outlined,color:AppColors.blue),title:const Text('Focus timer')),ListTile(onTap:onPin,leading:Icon(hasPin?Icons.lock:Icons.lock_outline,color:AppColors.blue),title:Text(hasPin?'Change app PIN':'Set app PIN')),const ListTile(leading:Icon(Icons.wifi_off_outlined,color:AppColors.blue),title:Text('Offline first'),subtitle:Text('Your data stays on this device'))])))]));}}
-int achievementCount(List<Habit> habits){var n=habits.isNotEmpty?1:0;final total=habits.fold<int>(0,(s,h)=>s+h.totalCompletions());final best=habits.fold<int>(0,(m,h)=>h.bestStreak()>m?h.bestStreak():m);if(total>=7)n++;if(total>=30)n++;if(total>=100)n++;if(best>=7)n++;if(best>=30)n++;return n;}
+  Future<void> addHabit() async {
+    final result = await showModalBottomSheet<HabitEdit>(context: context, isScrollControlled: true, backgroundColor: Colors.white, builder: (_) => const HabitEditor());
+    if (!mounted || result == null || result.name.trim().isEmpty) return;
+    setState(() => habits.add(result.toHabit()));
+    await saveHabits();
+  }
 
-class HabitDetail extends StatefulWidget{final Habit habit;final Future<void> Function() onChanged;const HabitDetail({super.key,required this.habit,required this.onChanged});@override State<HabitDetail> createState()=>_HabitDetailState();}
-class _HabitDetailState extends State<HabitDetail>{late DateTime month;@override void initState(){super.initState();month=DateTime(DateTime.now().year,DateTime.now().month,1);}Future<void> toggle(DateTime d)async{setState(()=>widget.habit.setDone(d,!widget.habit.isDone(d)));await widget.onChanged();}Future<void> addMeasurement()async{final v=await showDialog<double>(context:context,builder:(_)=>MeasurementDialog(unit:widget.habit.unit));if(v==null)return;setState(()=>widget.habit.measurements[Habit.key(DateTime.now())]=v);await widget.onChanged();}Future<void> editJournal()async{final key=Habit.key(DateTime.now());final c=TextEditingController(text:widget.habit.journal[key]??'');final r=await showDialog<String>(context:context,builder:(_)=>AlertDialog(title:const Text('Today\'s journal'),content:TextField(controller:c,maxLines:6),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(context,c.text),child:const Text('Save'))]));c.dispose();if(r==null)return;setState(()=>widget.habit.journal[key]=r.trim());await widget.onChanged();}Future<void> editNotes()async{final c=TextEditingController(text:widget.habit.notes);final r=await showDialog<String>(context:context,builder:(_)=>AlertDialog(title:const Text('Habit notes'),content:TextField(controller:c,maxLines:6),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(context,c.text),child:const Text('Save'))]));c.dispose();if(r==null)return;setState(()=>widget.habit.notes=r.trim());await widget.onChanged();}@override Widget build(BuildContext context){final h=widget.habit;final days=DateTime(month.year,month.month+1,0).day;final rate=h.completionRate(month).clamp(0.0,1.0).toDouble();final entries=h.measurements.entries.toList()..sort((a,b)=>b.key.compareTo(a.key));final journals=h.journal.entries.toList()..sort((a,b)=>b.key.compareTo(a.key));return Scaffold(appBar:AppBar(title:Text(h.name)),body:SingleChildScrollView(padding:const EdgeInsets.all(20),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[CardBox(child:Row(children:[SizedBox(width:72,height:72,child:CircularProgressIndicator(value:rate,strokeWidth:8,backgroundColor:AppColors.soft,color:AppColors.blue)),const SizedBox(width:16),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('🔥 ${h.currentStreak()} day streak',style:const TextStyle(fontSize:18,fontWeight:FontWeight.w900)),Text('Best: ${h.bestStreak()} days'),Text('${(rate*100).round()}% this month',style:const TextStyle(color:AppColors.muted))]))])),SectionTitle(title:'Goal'),CardBox(child:Text('${h.goal} ${h.unit} · ${h.frequency}',style:const TextStyle(fontWeight:FontWeight.w800))),SectionTitle(title:'Calendar'),CardBox(child:Column(children:[Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[IconButton(onPressed:()=>setState(()=>month=DateTime(month.year,month.month-1,1)),icon:const Icon(Icons.chevron_left)),Text(DateFormat('MMMM yyyy').format(month),style:const TextStyle(fontWeight:FontWeight.w900)),IconButton(onPressed:()=>setState(()=>month=DateTime(month.year,month.month+1,1)),icon:const Icon(Icons.chevron_right))]),GridView.builder(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),itemCount:days,gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:7),itemBuilder:(_,i){final d=DateTime(month.year,month.month,i+1);final scheduled=h.isScheduled(d);final done=h.isDone(d);return InkWell(onTap:scheduled?()=>toggle(d):null,child:Container(margin:const EdgeInsets.all(3),decoration:BoxDecoration(color:done?AppColors.blue:(scheduled?Colors.white:AppColors.bg),borderRadius:BorderRadius.circular(8),border:Border.all(color:scheduled?AppColors.border:Colors.transparent)),child:Center(child:Text('${i+1}',style:TextStyle(fontWeight:FontWeight.w800,color:done?Colors.white:AppColors.text)))));})])),SectionTitle(title:'Measurements',onAdd:addMeasurement,label:'＋ Add value'),CardBox(child:entries.isEmpty?const Text('No measurements yet.',style:TextStyle(color:AppColors.muted)):Column(children:entries.take(10).map((e)=>ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.show_chart,color:AppColors.blue),title:Text('${e.value} ${h.unit}'),subtitle:Text(e.key))).toList())),SectionTitle(title:'Journal',onAdd:editJournal,label:'＋ Today'),CardBox(child:journals.isEmpty?const Text('No journal entries yet.',style:TextStyle(color:AppColors.muted)):Column(children:journals.take(7).map((e)=>ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.menu_book_outlined,color:AppColors.blue),title:Text(e.key),subtitle:Text(e.value,maxLines:3,overflow:TextOverflow.ellipsis)).toList())),SectionTitle(title:'Notes',onAdd:editNotes,label:'Edit'),CardBox(child:Text(h.notes.isEmpty?'No notes yet.':h.notes,style:const TextStyle(color:AppColors.muted,height:1.5))),const SizedBox(height:20),SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()=>toggle(DateTime.now()),icon:Icon(h.isDone(DateTime.now())?Icons.undo:Icons.check),label:Text(h.isDone(DateTime.now())?'Mark today incomplete':'Mark today complete')))])));}}
+  Future<void> editHabit(Habit habit) async {
+    final result = await showModalBottomSheet<HabitEdit>(context: context, isScrollControlled: true, backgroundColor: Colors.white, builder: (_) => HabitEditor(habit: habit));
+    if (!mounted || result == null) return;
+    if (result.delete) {
+      setState(() => habits.removeWhere((h) => h.id == habit.id));
+    } else {
+      habit.name = result.name;
+      habit.category = result.category;
+      habit.goal = result.goal;
+      habit.unit = result.unit;
+      habit.frequency = result.frequency;
+      habit.weekdays = result.weekdays;
+      habit.pinned = result.pinned;
+      habit.active = result.active;
+      habit.tags = result.tags;
+      habit.notes = result.notes;
+      setState(() {});
+    }
+    await saveHabits();
+  }
 
-class HabitEdit{final String name,category,unit,frequency,notes;final int goal;final List<int> weekdays;final bool pinned,active,delete;final List<String> tags;const HabitEdit({required this.name,required this.category,required this.goal,required this.unit,required this.frequency,required this.weekdays,required this.pinned,required this.active,required this.tags,required this.notes,this.delete=false});Habit toHabit()=>Habit(id:DateTime.now().microsecondsSinceEpoch.toString(),name:name,category:category,goal:goal,unit:unit,frequency:frequency,weekdays:weekdays,pinned:pinned,active:active,tags:tags,notes:notes);}
-class HabitEditor extends StatefulWidget{final Habit? habit;const HabitEditor({super.key,this.habit});@override State<HabitEditor> createState()=>_HabitEditorState();}
-class _HabitEditorState extends State<HabitEditor>{late TextEditingController name,goal,tags,notes;late String category,unit,frequency;late List<int> weekdays;late bool pinned,active;final categories=['Personal','Health','Mind & Body','Productivity','Learning','Goals','Finance','Routine','Other'];final units=['times','minutes','hours','pages','litres','km','steps','reps','kg'];@override void initState(){super.initState();final h=widget.habit;name=TextEditingController(text:h?.name??'');goal=TextEditingController(text:'${h?.goal??1}');tags=TextEditingController(text:h?.tags.join(', ')??'');notes=TextEditingController(text:h?.notes??'');category=categories.contains(h?.category)?h!.category:'Personal';unit=units.contains(h?.unit)?h!.unit:'times';frequency=h?.frequency??'Every day';weekdays=List<int>.from(h?.weekdays??[1,2,3,4,5,6,7]);pinned=h?.pinned??false;active=h?.active??true;}@override void dispose(){name.dispose();goal.dispose();tags.dispose();notes.dispose();super.dispose();}void save(){if(name.text.trim().isEmpty)return;Navigator.pop(context,HabitEdit(name:name.text.trim(),category:category,goal:(int.tryParse(goal.text)??1).clamp(1,1000000),unit:unit,frequency:frequency,weekdays:weekdays.isEmpty?[1,2,3,4,5,6,7]:weekdays,pinned:pinned,active:active,tags:tags.text.split(',').map((x)=>x.trim()).where((x)=>x.isNotEmpty).toList(),notes:notes.text.trim()));}@override Widget build(BuildContext context){return SafeArea(child:Padding(padding:EdgeInsets.fromLTRB(20,12,20,MediaQuery.of(context).viewInsets.bottom+20),child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(widget.habit==null?'Create habit':'Edit habit',style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),TextField(controller:name,decoration:const InputDecoration(labelText:'Habit name')),const SizedBox(height:10),Row(children:[Expanded(child:DropdownButtonFormField<String>(value:category,items:categories.map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:(v){if(v!=null)setState(()=>category=v);})),const SizedBox(width:10),Expanded(child:DropdownButtonFormField<String>(value:unit,items:units.map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:(v){if(v!=null)setState(()=>unit=v);}))]),TextField(controller:goal,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Target')),const SizedBox(height:8),const Text('Frequency',style:TextStyle(fontWeight:FontWeight.w800)),Wrap(spacing:5,children:['Every day','Weekdays','Custom'].map((x)=>ChoiceChip(label:Text(x),selected:frequency==x,onSelected:(_)=>setState(()=>frequency=x))).toList()),if(frequency=='Custom')Wrap(spacing:4,children:List.generate(7,(i){final d=i+1;return FilterChip(label:Text(['M','T','W','T','F','S','S'][i]),selected:weekdays.contains(d),onSelected:(v)=>setState(()=>v?weekdays.add(d):weekdays.remove(d)));})),TextField(controller:tags,decoration:const InputDecoration(labelText:'Tags, comma separated')),TextField(controller:notes,maxLines:3,decoration:const InputDecoration(labelText:'Notes')),SwitchListTile(contentPadding:EdgeInsets.zero,value:pinned,onChanged:(v)=>setState(()=>pinned=v),title:const Text('Pin to top')),SwitchListTile(contentPadding:EdgeInsets.zero,value:active,onChanged:(v)=>setState(()=>active=v),title:const Text('Active')),if(widget.habit!=null)TextButton.icon(onPressed:()=>Navigator.pop(context,HabitEdit(name:'',category:'',goal:1,unit:'times',frequency:'Every day',weekdays:[1,2,3,4,5,6,7],pinned:false,active:false,tags:[],notes:'',delete:true)),icon:const Icon(Icons.delete_outline),label:const Text('Delete')),FilledButton(onPressed:save,style:FilledButton.styleFrom(minimumSize:const Size.fromHeight(52)),child:Text(widget.habit==null?'Create habit':'Save changes'))]))));}}
-class TodoEdit{final String title,category;final int priority;final DateTime? due;const TodoEdit({required this.title,required this.category,required this.priority,this.due});}
-class TodoEditor extends StatefulWidget{final Map<String,dynamic>? existing;const TodoEditor({super.key,this.existing});@override State<TodoEditor> createState()=>_TodoEditorState();}
-class _TodoEditorState extends State<TodoEditor>{late TextEditingController title;String category='General';int priority=1;DateTime? due;@override void initState(){super.initState();final x=widget.existing;title=TextEditingController(text:x?['title']??'');category=x?['category']??'General';priority=(x?['priority'] as num?)?.toInt()??1;final d=x?['due'];if(d is String&&d.isNotEmpty)due=DateTime.tryParse(d);}@override void dispose(){title.dispose();super.dispose();}@override Widget build(BuildContext context)=>AlertDialog(title:Text(widget.existing==null?'New task':'Edit task'),content:SingleChildScrollView(child:Column(children:[TextField(controller:title,decoration:const InputDecoration(labelText:'Task')),DropdownButtonFormField<String>(value:category,items:['General','College','Work','Personal'].map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:(v){if(v!=null)setState(()=>category=v);}),DropdownButtonFormField<int>(value:priority,items:const[DropdownMenuItem(value:1,child:Text('Low')),DropdownMenuItem(value:2,child:Text('Medium')),DropdownMenuItem(value:3,child:Text('High'))],onChanged:(v)=>setState(()=>priority=v??1)),ListTile(contentPadding:EdgeInsets.zero,title:Text(due==null?'No due date':'Due ${DateFormat('d MMM yyyy').format(due!)}'),leading:const Icon(Icons.event),onTap:()async{final d=await showDatePicker(context:context,initialDate:due??DateTime.now(),firstDate:DateTime(2020),lastDate:DateTime(2100));if(d!=null&&mounted)setState(()=>due=d);})])),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(context,TodoEdit(title:title.text,category:category,priority:priority,due:due)),child:const Text('Save'))]);}
-class FocusTimer extends StatefulWidget{final StorageService storage;final DateTime date;final int initial;final ValueChanged<int> onSaved;const FocusTimer({super.key,required this.storage,required this.date,required this.initial,required this.onSaved});@override State<FocusTimer> createState()=>_FocusTimerState();}
-class _FocusTimerState extends State<FocusTimer>{late int seconds;Timer? timer;bool running=false;@override void initState(){super.initState();seconds=widget.initial;}@override void dispose(){timer?.cancel();super.dispose();}void toggle(){if(running){timer?.cancel();setState(()=>running=false);}else{timer=Timer.periodic(const Duration(seconds:1),(_){if(mounted)setState(()=>seconds++);});setState(()=>running=true);}}Future<void> save()async{final data=await widget.storage.loadTimerSeconds();data[Habit.key(widget.date)]=seconds;await widget.storage.saveTimerSeconds(data);widget.onSaved(seconds);if(mounted)Navigator.pop(context);}String format(){final h=seconds~/3600;final m=(seconds%3600)~/60;final s=seconds%60;return '${h.toString().padLeft(2,'0')}:${m.toString().padLeft(2,'0')}:${s.toString().padLeft(2,'0')}';}@override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Focus Timer')),body:Center(child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[const Icon(Icons.timer_outlined,size:64,color:AppColors.blue),Text(format(),style:const TextStyle(fontSize:46,fontWeight:FontWeight.w900)),FilledButton.icon(onPressed:toggle,icon:Icon(running?Icons.pause:Icons.play_arrow),label:Text(running?'Pause':'Start')),OutlinedButton(onPressed:save,child:const Text('Save today'))])));}
-class MeasurementDialog extends StatefulWidget{final String unit;const MeasurementDialog({super.key,required this.unit});@override State<MeasurementDialog> createState()=>_MeasurementDialogState();}
-class _MeasurementDialogState extends State<MeasurementDialog>{final c=TextEditingController();@override void dispose(){c.dispose();super.dispose();}@override Widget build(BuildContext context)=>AlertDialog(title:Text('Add ${widget.unit}'),content:TextField(controller:c,keyboardType:const TextInputType.numberWithOptions(decimal:true)),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Cancel')),FilledButton(onPressed:(){final v=double.tryParse(c.text);if(v!=null)Navigator.pop(context,v);},child:const Text('Save'))]);}
-class PinDialog extends StatefulWidget{final String? current;const PinDialog({super.key,this.current});@override State<PinDialog> createState()=>_PinDialogState();}
-class _PinDialogState extends State<PinDialog>{final c=TextEditingController();@override void dispose(){c.dispose();super.dispose();}@override Widget build(BuildContext context)=>AlertDialog(title:Text(widget.current==null?'Set PIN':'Change PIN'),content:TextField(controller:c,keyboardType:TextInputType.number,obscureText:true,maxLength:4),actions:[if(widget.current!=null)TextButton(onPressed:()=>Navigator.pop(context,''),child:const Text('Remove')),FilledButton(onPressed:(){if(c.text.length==4)Navigator.pop(context,c.text);},child:const Text('Save'))]);}
-class LockDialog extends StatefulWidget{final String pin;const LockDialog({super.key,required this.pin});@override State<LockDialog> createState()=>_LockDialogState();}
-class _LockDialogState extends State<LockDialog>{final c=TextEditingController();String error='';@override void dispose(){c.dispose();super.dispose();}@override Widget build(BuildContext context)=>AlertDialog(title:const Text('Enter PIN'),content:TextField(controller:c,keyboardType:TextInputType.number,obscureText:true,maxLength:4,decoration:InputDecoration(errorText:error.isEmpty?null:error)),actions:[FilledButton(onPressed:(){if(c.text==widget.pin){Navigator.pop(context,true);}else{setState(()=>error='Incorrect PIN');}},child:const Text('Unlock'))]);}
-class LockScreen extends StatelessWidget{final VoidCallback onUnlock;const LockScreen({super.key,required this.onUnlock});@override Widget build(BuildContext context)=>Scaffold(body:Center(child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[const CircleAvatar(radius:42,child:Icon(Icons.lock_outline,size:40)),const SizedBox(height:18),const Text('Habit Tracker is locked',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),FilledButton.icon(onPressed:onUnlock,icon:const Icon(Icons.lock_open),label:const Text('Unlock'))]));}
-String priorityName(int p)=>p==3?'High':p==2?'Medium':'Low';
+  Future<void> toggleHabit(Habit habit, DateTime date) async {
+    setState(() => habit.setDone(date, !habit.isDone(date)));
+    await saveHabits();
+  }
+
+  Future<void> openHabit(Habit habit) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => HabitDetail(habit: habit, onChanged: saveHabits)));
+    if (mounted) setState(() {});
+  }
+
+  Future<void> addTodo() async {
+    final result = await showDialog<TodoEdit>(context: context, builder: (_) => const TodoEditor());
+    if (!mounted || result == null || result.title.trim().isEmpty) return;
+    setState(() => todos.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'title': result.title.trim(), 'done': false, 'priority': result.priority, 'category': result.category, 'due': result.due == null ? '' : Habit.key(result.due!)}));
+    await store.saveTodos(todos);
+  }
+
+  Future<void> editTodo(int index) async {
+    final old = todos[index];
+    final result = await showDialog<TodoEdit>(context: context, builder: (_) => TodoEditor(existing: old));
+    if (!mounted || result == null) return;
+    setState(() {
+      old['title'] = result.title.trim();
+      old['priority'] = result.priority;
+      old['category'] = result.category;
+      old['due'] = result.due == null ? '' : Habit.key(result.due!);
+    });
+    await store.saveTodos(todos);
+  }
+
+  Future<void> toggleTodo(int index) async { setState(() => todos[index]['done'] = todos[index]['done'] != true); await store.saveTodos(todos); }
+  Future<void> deleteTodo(int index) async { setState(() => todos.removeAt(index)); await store.saveTodos(todos); }
+
+  Future<void> openTimer() async {
+    final key = Habit.key(selected);
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => FocusTimer(storage: store, date: selected, initial: focus[key] ?? 0, onSaved: (value) => setState(() => focus[key] = value))));
+  }
+
+  Future<void> setPin() async {
+    final result = await showDialog<String>(context: context, builder: (_) => PinDialog(current: pin));
+    if (result == null) return;
+    await store.savePin(result);
+    if (!mounted) return;
+    setState(() { pin = result.isEmpty ? null : result; locked = false; });
+  }
+
+  Future<void> unlock() async {
+    final ok = await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => LockDialog(pin: pin!));
+    if (ok == true && mounted) setState(() => locked = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (locked && pin != null) return LockScreen(onUnlock: unlock);
+    final pages = [
+      Dashboard(habits: habits, moods: moods, date: selected, onAdd: addHabit, onToggle: toggleHabit, onOpen: openHabit, onEdit: editHabit, onMood: (value) async { setState(() => moods[Habit.key(selected)] = value); await store.saveMoods(moods); }, onTimer: openTimer),
+      Daily(habits: habits, date: selected, onDate: (date) => setState(() => selected = date), onToggle: toggleHabit, onOpen: openHabit, onEdit: editHabit, onAdd: addHabit),
+      Stats(habits: habits, moods: moods, onOpen: openHabit),
+      TodoPage(todos: todos, onAdd: addTodo, onEdit: editTodo, onToggle: toggleTodo, onDelete: deleteTodo),
+      Profile(habits: habits, onTimer: openTimer, onPin: setPin, hasPin: pin != null),
+    ];
+    return Scaffold(
+      body: SafeArea(child: IndexedStack(index: tab, children: pages)),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: tab,
+        indicatorColor: AppColors.soft,
+        onDestinationSelected: (value) => setState(() => tab = value),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.check_circle_outline), selectedIcon: Icon(Icons.check_circle), label: 'Habits'),
+          NavigationDestination(icon: Icon(Icons.insights_outlined), selectedIcon: Icon(Icons.insights), label: 'Stats'),
+          NavigationDestination(icon: Icon(Icons.list_alt_outlined), selectedIcon: Icon(Icons.list_alt), label: 'To-Do'),
+          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+}
+
+class PageHeader extends StatelessWidget {
+  final String title, subtitle;
+  final Widget? action;
+  const PageHeader({super.key, required this.title, required this.subtitle, this.action});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+      child: Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.text)),
+          Text(subtitle, style: const TextStyle(color: AppColors.muted)),
+        ])),
+        if (action != null) action!,
+      ]),
+    );
+  }
+}
+
+class CardBox extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  const CardBox({super.key, required this.child, this.padding = const EdgeInsets.all(18)});
+  @override
+  Widget build(BuildContext context) => Container(padding: padding, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.border)), child: child);
+}
+
+class SectionTitle extends StatelessWidget {
+  final String title, label;
+  final VoidCallback? onAdd;
+  const SectionTitle({super.key, required this.title, this.onAdd, this.label = 'Add'});
+  @override
+  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 10), child: Row(children: [Expanded(child: Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900))), if (onAdd != null) TextButton(onPressed: onAdd, child: Text(label))]));
+}
+
+class MiniStat extends StatelessWidget {
+  final String value, label;
+  final IconData icon;
+  const MiniStat({super.key, required this.value, required this.label, required this.icon});
+  @override
+  Widget build(BuildContext context) => CardBox(padding: const EdgeInsets.all(14), child: Row(children: [Icon(icon, color: AppColors.blue), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)), Text(label, style: const TextStyle(fontSize: 11, color: AppColors.muted))]))]));
+}
+
+class Dashboard extends StatefulWidget {
+  final List<Habit> habits;
+  final Map<String, int> moods;
+  final DateTime date;
+  final VoidCallback onAdd, onTimer;
+  final Future<void> Function(Habit, DateTime) onToggle;
+  final Future<void> Function(Habit) onOpen, onEdit;
+  final Future<void> Function(int) onMood;
+  const Dashboard({super.key, required this.habits, required this.moods, required this.date, required this.onAdd, required this.onTimer, required this.onToggle, required this.onOpen, required this.onEdit, required this.onMood});
+  @override State<Dashboard> createState() => _DashboardState();
+}
+
+class _DashboardState extends State<Dashboard> {
+  String search = '';
+  String filter = 'All';
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.habits.where((h) => h.active).toList();
+    final visible = active.where((habit) {
+      final q = search.toLowerCase();
+      final matches = q.isEmpty || habit.name.toLowerCase().contains(q) || habit.category.toLowerCase().contains(q) || habit.tags.any((tag) => tag.toLowerCase().contains(q));
+      final filterMatches = filter == 'All' || (filter == 'Pinned' && habit.pinned) || (filter == 'Completed' && habit.isDone(widget.date)) || (filter == 'Missed' && habit.isScheduled(widget.date) && !habit.isDone(widget.date));
+      return matches && filterMatches;
+    }).toList();
+    visible.sort((a, b) => a.pinned == b.pinned ? 0 : (a.pinned ? -1 : 1));
+    final scheduled = active.where((h) => h.isScheduled(widget.date)).toList();
+    final done = scheduled.where((h) => h.isDone(widget.date)).length;
+    final progress = scheduled.isEmpty ? 0.0 : done / scheduled.length;
+    final streak = active.fold<int>(0, (max, h) { final value = h.currentStreak(widget.date); return value > max ? value : max; });
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 28),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        PageHeader(title: 'Good day 👋', subtitle: DateFormat('EEEE, d MMMM').format(widget.date), action: IconButton(onPressed: widget.onTimer, icon: const Icon(Icons.timer_outlined))),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TextField(onChanged: (value) => setState(() => search = value), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search habits or tags'))),
+        const SizedBox(height: 8),
+        SizedBox(height: 42, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 20), children: ['All', 'Pinned', 'Completed', 'Missed'].map((item) => Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(item), selected: filter == item, onSelected: (_) => setState(() => filter = item)))).toList())),
+        Padding(padding: const EdgeInsets.fromLTRB(20, 10, 20, 0), child: CardBox(child: Row(children: [SizedBox(width: 84, height: 84, child: Stack(fit: StackFit.expand, children: [CircularProgressIndicator(value: progress, strokeWidth: 9, backgroundColor: AppColors.soft, color: AppColors.blue), Center(child: Text('${(progress * 100).round()}%', style: const TextStyle(fontWeight: FontWeight.w900)))])), const SizedBox(width: 18), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("Today's progress", style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), Text('$done of ${scheduled.length} scheduled habits', style: const TextStyle(color: AppColors.muted)), const SizedBox(height: 8), LinearProgressIndicator(value: progress, backgroundColor: AppColors.soft)]))]))),
+        Padding(padding: const EdgeInsets.fromLTRB(20, 14, 20, 0), child: Row(children: [Expanded(child: MiniStat(value: '$streak', label: 'Current streak', icon: Icons.local_fire_department_outlined)), const SizedBox(width: 10), Expanded(child: MiniStat(value: '${active.length}', label: 'Active habits', icon: Icons.checklist_outlined))])),
+        SectionTitle(title: "Today's habits", onAdd: widget.onAdd, label: '＋ Add'),
+        if (visible.isEmpty) const Padding(padding: EdgeInsets.all(30), child: Center(child: Text('No matching habits.', style: TextStyle(color: AppColors.muted)))) else ...visible.map((habit) => Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5), child: HabitTile(habit: habit, date: widget.date, onToggle: () => widget.onToggle(habit, widget.date), onOpen: () => widget.onOpen(habit), onEdit: () => widget.onEdit(habit)))),
+        const SectionTitle(title: 'How are you feeling?'),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: List.generate(5, (index) { final value = index + 1; return InkWell(onTap: () => widget.onMood(value), child: Text(['😫', '😕', '😐', '🙂', '😄'][index], style: TextStyle(fontSize: 28, decoration: widget.moods[Habit.key(widget.date)] == value ? TextDecoration.underline : null))); }))]),
+      ]),
+    );
+  }
+}
+
+class HabitTile extends StatelessWidget {
+  final Habit habit;
+  final DateTime date;
+  final VoidCallback onToggle, onOpen, onEdit;
+  const HabitTile({super.key, required this.habit, required this.date, required this.onToggle, required this.onOpen, required this.onEdit});
+  @override
+  Widget build(BuildContext context) {
+    final done = habit.isDone(date);
+    return GestureDetector(onTap: onOpen, onLongPress: onEdit, child: CardBox(child: Row(children: [GestureDetector(onTap: onToggle, child: CircleAvatar(radius: 21, backgroundColor: done ? AppColors.blue : AppColors.soft, child: Icon(done ? Icons.check : Icons.circle_outlined, color: done ? Colors.white : AppColors.blue))), const SizedBox(width: 13), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Expanded(child: Text(habit.name, style: TextStyle(fontWeight: FontWeight.w900, decoration: done ? TextDecoration.lineThrough : null))), if (habit.pinned) const Icon(Icons.push_pin, size: 15, color: AppColors.blue)]), Text('${habit.category} · ${habit.goal} ${habit.unit} · 🔥 ${habit.currentStreak(date)}', style: const TextStyle(color: AppColors.muted, fontSize: 12))]))])));
+  }
+}
+
+class Daily extends StatelessWidget {
+  final List<Habit> habits;
+  final DateTime date;
+  final ValueChanged<DateTime> onDate;
+  final VoidCallback onAdd;
+  final Future<void> Function(Habit, DateTime) onToggle;
+  final Future<void> Function(Habit) onOpen, onEdit;
+  const Daily({super.key, required this.habits, required this.date, required this.onDate, required this.onToggle, required this.onOpen, required this.onEdit, required this.onAdd});
+  @override
+  Widget build(BuildContext context) {
+    final monthDays = DateTime(date.year, date.month + 1, 0).day;
+    final active = habits.where((h) => h.active && h.isScheduled(date)).toList();
+    final done = active.where((h) => h.isDone(date)).length;
+    return Column(children: [
+      PageHeader(title: 'Daily', subtitle: '$done of ${active.length} completed', action: IconButton(onPressed: onAdd, icon: const Icon(Icons.add))),
+      SizedBox(height: 82, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: monthDays, padding: const EdgeInsets.symmetric(horizontal: 14), itemBuilder: (_, index) { final day = DateTime(date.year, date.month, index + 1); final selected = Habit.key(day) == Habit.key(date); return GestureDetector(onTap: () => onDate(day), child: Container(width: 52, margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 8), decoration: BoxDecoration(color: selected ? AppColors.blue : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: selected ? AppColors.blue : AppColors.border)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(DateFormat('EEE').format(day).substring(0, 2), style: TextStyle(color: selected ? Colors.white : AppColors.muted, fontSize: 11)), const SizedBox(height: 4), Text('${day.day}', style: TextStyle(color: selected ? Colors.white : AppColors.text, fontWeight: FontWeight.w900))]))); })),
+      Expanded(child: active.isEmpty ? const Center(child: Text('No habits scheduled today.', style: TextStyle(color: AppColors.muted))) : ListView.builder(padding: const EdgeInsets.fromLTRB(20, 10, 20, 20), itemCount: active.length, itemBuilder: (_, index) { final habit = active[index]; return Padding(padding: const EdgeInsets.only(bottom: 10), child: HabitTile(habit: habit, date: date, onToggle: () => onToggle(habit, date), onOpen: () => onOpen(habit), onEdit: () => onEdit(habit))); })),
+    ]);
+  }
+}
+
+class Stats extends StatefulWidget {
+  final List<Habit> habits;
+  final Map<String, int> moods;
+  final Future<void> Function(Habit) onOpen;
+  const Stats({super.key, required this.habits, required this.moods, required this.onOpen});
+  @override State<Stats> createState() => _StatsState();
+}
+
+class _StatsState extends State<Stats> {
+  String range = '30D';
+  int year = DateTime.now().year;
+  String selectedHabit = 'All habits';
+  int get days => range == '7D' ? 7 : (range == '90D' ? 90 : (range == '1Y' ? 365 : 30));
+  List<Habit> get active => widget.habits.where((h) => h.active).toList();
+
+  double completionRate(DateTime start, DateTime end) {
+    var done = 0, scheduled = 0;
+    for (final habit in active) {
+      for (var day = start; !day.isAfter(end); day = day.add(const Duration(days: 1))) {
+        if (habit.isScheduled(day)) { scheduled++; if (habit.isDone(day)) done++; }
+      }
+    }
+    return scheduled == 0 ? 0 : done / scheduled;
+  }
+
+  int completions(DateTime start, DateTime end) {
+    var total = 0;
+    for (final habit in active) {
+      for (var day = start; !day.isAfter(end); day = day.add(const Duration(days: 1))) { if (habit.isDone(day)) total++; }
+    }
+    return total;
+  }
+
+  int maxCurrentStreak() { var value = 0; for (final habit in active) { final s = habit.currentStreak(); if (s > value) value = s; } return value; }
+  int maxBestStreak() { var value = 0; for (final habit in active) { final s = habit.bestStreak(); if (s > value) value = s; } return value; }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final start = today.subtract(Duration(days: days - 1));
+    final rate = completionRate(start, today);
+    final total = completions(start, today);
+    final names = ['All habits', ...active.map((h) => h.name)];
+    if (!names.contains(selectedHabit)) selectedHabit = 'All habits';
+    return SingleChildScrollView(padding: const EdgeInsets.only(bottom: 30), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const PageHeader(title: 'Analytics', subtitle: 'Your habit history and patterns'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Wrap(spacing: 7, children: ['7D', '30D', '90D', '1Y'].map((item) => ChoiceChip(label: Text(item), selected: range == item, onSelected: (_) => setState(() => range = item))).toList())),
+      Padding(padding: const EdgeInsets.fromLTRB(20, 14, 20, 0), child: GridView.count(crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.7, children: [MiniStat(value: '${(rate * 100).round()}%', label: 'Completion rate', icon: Icons.percent), MiniStat(value: '${maxCurrentStreak()}', label: 'Current streak', icon: Icons.local_fire_department), MiniStat(value: '${maxBestStreak()}', label: 'Best streak', icon: Icons.emoji_events_outlined), MiniStat(value: '$total', label: 'Completions', icon: Icons.check_circle_outline)])),
+      const SectionTitle(title: 'Completion trend'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: TrendChart(habits: active, days: days))),
+      const SectionTitle(title: 'Contribution activity'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [const Text('Activity heatmap', style: TextStyle(fontWeight: FontWeight.w900)), const Spacer(), SizedBox(width: 145, child: DropdownButton<String>(isExpanded: true, value: selectedHabit, items: names.map((name) => DropdownMenuItem(value: name, child: Text(name, overflow: TextOverflow.ellipsis))).toList(), onChanged: (value) { if (value != null) setState(() => selectedHabit = value); }))]),
+        const SizedBox(height: 10),
+        ActivityHeatmap(habits: active, year: year, habitName: selectedHabit),
+        const SizedBox(height: 10),
+        Row(children: [const Text('Less', style: TextStyle(fontSize: 11, color: AppColors.muted)), ...List.generate(5, (index) => Container(width: 14, height: 14, margin: const EdgeInsets.only(left: 5), decoration: BoxDecoration(color: heatColor(index), borderRadius: BorderRadius.circular(3)))), const Text('  More', style: TextStyle(fontSize: 11, color: AppColors.muted))]),
+      ]))),
+      Padding(padding: const EdgeInsets.fromLTRB(20, 8, 20, 0), child: Row(children: [IconButton(onPressed: year > 2020 ? () => setState(() => year--) : null, icon: const Icon(Icons.chevron_left)), Expanded(child: Center(child: Text('$year heatmap', style: const TextStyle(fontWeight: FontWeight.w800)))), IconButton(onPressed: () => setState(() => year++), icon: const Icon(Icons.chevron_right))])),
+      const SectionTitle(title: 'Day-of-week consistency'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: WeekdayAnalysis(habits: active))),
+      const SectionTitle(title: 'Habit performance'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Column(children: active.map((habit) { final value = habit.completionRate(now); return ListTile(contentPadding: EdgeInsets.zero, onTap: () => widget.onOpen(habit), title: Text(habit.name, style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Padding(padding: const EdgeInsets.only(top: 5), child: LinearProgressIndicator(value: value.clamp(0.0, 1.0).toDouble(), backgroundColor: AppColors.soft)), trailing: Text('${(value * 100).round()}%')); }).toList()))),
+      const SectionTitle(title: 'Streak history'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: StreakHistory(habits: active))),
+      const SectionTitle(title: 'Needs attention'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: NeedsAttention(habits: active))),
+      const SectionTitle(title: 'Weekly review'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: WeeklyReview(habits: active, moods: widget.moods))),
+    ]));
+  }
+}
+
+class TrendChart extends StatelessWidget {
+  final List<Habit> habits;
+  final int days;
+  const TrendChart({super.key, required this.habits, required this.days});
+  List<double> values() {
+    final result = <double>[];
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    for (var offset = days - 1; offset >= 0; offset--) {
+      final day = today.subtract(Duration(days: offset));
+      var scheduled = 0, done = 0;
+      for (final habit in habits) { if (habit.isScheduled(day)) { scheduled++; if (habit.isDone(day)) done++; } }
+      result.add(scheduled == 0 ? 0.0 : done / scheduled);
+    }
+    return result;
+  }
+  @override Widget build(BuildContext context) { final data = values(); return SizedBox(height: 190, child: CustomPaint(painter: TrendPainter(data), child: const SizedBox.expand())); }
+}
+
+class TrendPainter extends CustomPainter {
+  final List<double> values;
+  TrendPainter(this.values);
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) return;
+    final fill = Paint()..color = AppColors.soft.withOpacity(.75)..style = PaintingStyle.fill;
+    final line = Paint()..color = AppColors.blue..strokeWidth = 3..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+    final points = <Offset>[];
+    for (var i = 0; i < values.length; i++) { final x = values.length == 1 ? 0.0 : size.width * i / (values.length - 1); final y = size.height - 25 - values[i] * (size.height - 55); points.add(Offset(x, y)); }
+    final area = Path()..moveTo(points.first.dx, size.height - 25);
+    for (final point in points) area.lineTo(point.dx, point.dy);
+    area.lineTo(points.last.dx, size.height - 25); area.close(); canvas.drawPath(area, fill);
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var i = 1; i < points.length; i++) path.lineTo(points[i].dx, points[i].dy);
+    canvas.drawPath(path, line);
+    for (final point in points) canvas.drawCircle(point, 3.5, Paint()..color = AppColors.blue);
+    final axis = Paint()..color = AppColors.border..strokeWidth = 1;
+    canvas.drawLine(Offset(0, size.height - 25), Offset(size.width, size.height - 25), axis);
+  }
+  @override bool shouldRepaint(covariant TrendPainter oldDelegate) => true;
+}
+
+class ActivityHeatmap extends StatelessWidget {
+  final List<Habit> habits;
+  final int year;
+  final String habitName;
+  const ActivityHeatmap({super.key, required this.habits, required this.year, required this.habitName});
+
+  int level(DateTime day) {
+    if (day.year != year) return 0;
+    Habit? target;
+    if (habitName != 'All habits') { for (final habit in habits) { if (habit.name == habitName) { target = habit; break; } } }
+    var scheduled = 0, done = 0;
+    if (target != null) {
+      if (target.isScheduled(day)) { scheduled = 1; if (target.isDone(day)) done = 1; }
+    } else {
+      for (final habit in habits) { if (habit.isScheduled(day)) { scheduled++; if (habit.isDone(day)) done++; } }
+    }
+    if (scheduled == 0) return 0;
+    return ((done / scheduled) * 4).ceil().clamp(0, 4).toInt();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final first = DateTime(year, 1, 1);
+    final start = first.subtract(Duration(days: first.weekday - 1));
+    final weeks = <List<DateTime>>[];
+    var cursor = start;
+    final end = DateTime(year, 12, 31);
+    while (!cursor.isAfter(end)) {
+      final week = <DateTime>[];
+      for (var row = 0; row < 7; row++) week.add(cursor.add(Duration(days: row)));
+      weeks.add(week);
+      cursor = cursor.add(const Duration(days: 7));
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Column(children: [const SizedBox(height: 18), for (final label in const ['Mon', 'Wed', 'Fri']) Padding(padding: const EdgeInsets.only(bottom: 9), child: SizedBox(width: 25, child: Text(label, style: const TextStyle(fontSize: 9, color: AppColors.muted))))]),
+        const SizedBox(width: 5),
+        ...weeks.map((week) => Padding(padding: const EdgeInsets.only(right: 3), child: Column(children: week.map((day) => Padding(padding: const EdgeInsets.only(bottom: 3), child: Tooltip(message: '${DateFormat('d MMM yyyy').format(day)} · ${level(day)}/4', child: Container(width: 12, height: 12, decoration: BoxDecoration(color: heatColor(level(day)), borderRadius: BorderRadius.circular(3)))))).toList()))).toList(),
+      ]),
+    );
+  }
+}
+
+Color heatColor(int level) {
+  switch (level) { case 1: return const Color(0xFFD7E4FF); case 2: return const Color(0xFFAFC9FF); case 3: return const Color(0xFF6F9FFF); case 4: return AppColors.blue; default: return const Color(0xFFEDEFF3); }
+}
+
+class WeekdayAnalysis extends StatelessWidget {
+  final List<Habit> habits;
+  const WeekdayAnalysis({super.key, required this.habits});
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: List.generate(7, (index) {
+      final weekday = index + 1;
+      var done = 0, total = 0;
+      for (var offset = 0; offset < 90; offset++) {
+        final day = DateTime.now().subtract(Duration(days: offset));
+        if (day.weekday != weekday) continue;
+        for (final habit in habits) { if (habit.isScheduled(day)) { total++; if (habit.isDone(day)) done++; } }
+      }
+      final rate = total == 0 ? 0.0 : done / total;
+      return Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(children: [SizedBox(width: 34, child: Text(DateFormat('EEE').format(DateTime(2026, 1, 5 + index)), style: const TextStyle(fontSize: 12))), Expanded(child: LinearProgressIndicator(value: rate, minHeight: 9, backgroundColor: AppColors.soft)), const SizedBox(width: 10), SizedBox(width: 38, child: Text('${(rate * 100).round()}%', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)))]));
+    }));
+  }
+}
+
+class StreakHistory extends StatelessWidget {
+  final List<Habit> habits;
+  const StreakHistory({super.key, required this.habits});
+  @override
+  Widget build(BuildContext context) {
+    if (habits.isEmpty) return const Text('Create a habit to build streak history.', style: TextStyle(color: AppColors.muted));
+    return Column(children: habits.map((habit) => ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.local_fire_department_outlined, color: AppColors.amber), title: Text(habit.name, style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('Current ${habit.currentStreak()} days · Longest ${habit.bestStreak()} days')).toList());
+  }
+}
+
+class NeedsAttention extends StatelessWidget {
+  final List<Habit> habits;
+  const NeedsAttention({super.key, required this.habits});
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final items = habits.where((habit) => habit.totalCompletions() > 0 && habit.completionRate(now) < .6).toList();
+    if (items.isEmpty) return const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.check_circle, color: AppColors.green), title: Text('Everything is on track'), subtitle: Text('Keep your current rhythm going.'));
+    return Column(children: items.take(4).map((habit) => ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.trending_down, color: AppColors.red), title: Text(habit.name), subtitle: Text('${(habit.completionRate(now) * 100).round()}% this month')).toList());
+  }
+}
+
+class WeeklyReview extends StatelessWidget {
+  final List<Habit> habits;
+  final Map<String, int> moods;
+  const WeeklyReview({super.key, required this.habits, required this.moods});
+  @override
+  Widget build(BuildContext context) {
+    var done = 0, scheduled = 0;
+    for (var offset = 0; offset < 7; offset++) { final day = DateTime.now().subtract(Duration(days: offset)); for (final habit in habits) { if (habit.isScheduled(day)) { scheduled++; if (habit.isDone(day)) done++; } } }
+    final rate = scheduled == 0 ? 0.0 : done / scheduled;
+    final moodValues = moods.entries.where((entry) { final date = DateTime.tryParse(entry.key); return date != null && DateTime.now().difference(date).inDays < 7; }).map((entry) => entry.value).toList();
+    final mood = moodValues.isEmpty ? null : moodValues.reduce((a, b) => a + b) / moodValues.length;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Last 7 days: ${(rate * 100).round()}% completion', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 6), LinearProgressIndicator(value: rate, backgroundColor: AppColors.soft), const SizedBox(height: 10), Text(mood == null ? 'No mood data this week.' : 'Average mood: ${mood.toStringAsFixed(1)} / 5')]);
+  }
+}
+
+class TodoPage extends StatefulWidget {
+  final List<Map<String, dynamic>> todos;
+  final VoidCallback onAdd;
+  final Future<void> Function(int) onEdit, onToggle, onDelete;
+  const TodoPage({super.key, required this.todos, required this.onAdd, required this.onEdit, required this.onToggle, required this.onDelete});
+  @override State<TodoPage> createState() => _TodoPageState();
+}
+
+class _TodoPageState extends State<TodoPage> {
+  String filter = 'All', search = '';
+  @override
+  Widget build(BuildContext context) {
+    final entries = widget.todos.asMap().entries.where((entry) {
+      final item = entry.value;
+      final q = search.toLowerCase();
+      final matches = q.isEmpty || '${item['title']}'.toLowerCase().contains(q) || '${item['category']}'.toLowerCase().contains(q);
+      final filterMatches = filter == 'All' || (filter == 'Open' && item['done'] != true) || (filter == 'Completed' && item['done'] == true) || (filter == 'High' && item['priority'] == 3);
+      return matches && filterMatches;
+    }).toList();
+    final done = widget.todos.where((item) => item['done'] == true).length;
+    final progress = widget.todos.isEmpty ? 0.0 : done / widget.todos.length;
+    return Column(children: [
+      PageHeader(title: 'To-Do', subtitle: '$done completed · ${widget.todos.length - done} remaining', action: IconButton(onPressed: widget.onAdd, icon: const Icon(Icons.add))),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TextField(onChanged: (value) => setState(() => search = value), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search tasks'))),
+      const SizedBox(height: 8),
+      SizedBox(height: 42, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 20), children: ['All', 'Open', 'Completed', 'High'].map((item) => Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(item), selected: filter == item, onSelected: (_) => setState(() => filter = item)))).toList())),
+      Padding(padding: const EdgeInsets.fromLTRB(20, 10, 20, 0), child: CardBox(child: Column(children: [LinearProgressIndicator(value: progress, backgroundColor: AppColors.soft), const SizedBox(height: 8), Text(widget.todos.isEmpty ? 'No tasks yet' : '$done of ${widget.todos.length} complete')]))),
+      Expanded(child: entries.isEmpty ? const Center(child: Text('No tasks match your filter.', style: TextStyle(color: AppColors.muted))) : ListView.builder(padding: const EdgeInsets.all(20), itemCount: entries.length, itemBuilder: (_, index) { final entry = entries[index]; final item = entry.value; return Dismissible(key: ValueKey(item['id']), background: Container(margin: const EdgeInsets.only(bottom: 8), color: AppColors.red, alignment: Alignment.centerLeft, padding: const EdgeInsets.only(left: 20), child: const Icon(Icons.delete, color: Colors.white)), onDismissed: (_) => widget.onDelete(entry.key), child: Card(margin: const EdgeInsets.only(bottom: 8), child: ListTile(onTap: () => widget.onEdit(entry.key), leading: Checkbox(value: item['done'] == true, onChanged: (_) => widget.onToggle(entry.key)), title: Text('${item['title']}', style: TextStyle(fontWeight: FontWeight.w800, decoration: item['done'] == true ? TextDecoration.lineThrough : null)), subtitle: Text('${item['category'] ?? 'General'} · ${priorityName((item['priority'] as num?)?.toInt() ?? 1)}'), trailing: const Icon(Icons.edit_outlined, size: 18))); })));
+  }
+}
+
+String priorityName(int value) => value == 3 ? 'High' : (value == 2 ? 'Medium' : 'Low');
+
+class Profile extends StatelessWidget {
+  final List<Habit> habits;
+  final VoidCallback onTimer, onPin;
+  final bool hasPin;
+  const Profile({super.key, required this.habits, required this.onTimer, required this.onPin, required this.hasPin});
+  @override
+  Widget build(BuildContext context) {
+    final completions = habits.fold<int>(0, (sum, habit) => sum + habit.totalCompletions());
+    final streak = habits.fold<int>(0, (max, habit) { final value = habit.currentStreak(); return value > max ? value : max; });
+    return SingleChildScrollView(padding: const EdgeInsets.only(bottom: 30), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const PageHeader(title: 'Profile', subtitle: 'Your private habit space'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Row(children: [const CircleAvatar(radius: 34, backgroundColor: AppColors.soft, child: Icon(Icons.person, color: AppColors.blue, size: 34)), const SizedBox(width: 15), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Habit Builder', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), Text('${habits.length} habits · $completions completions', style: const TextStyle(color: AppColors.muted))]))]))),
+      Padding(padding: const EdgeInsets.fromLTRB(20, 14, 20, 0), child: Row(children: [Expanded(child: MiniStat(value: '$streak', label: 'Current streak', icon: Icons.local_fire_department)), const SizedBox(width: 10), Expanded(child: MiniStat(value: '$completions', label: 'Completions', icon: Icons.check_circle_outline))])),
+      const SectionTitle(title: 'Achievements'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Achievements(habits: habits))),
+      const SectionTitle(title: 'Tools'),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Column(children: [ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.timer_outlined, color: AppColors.blue), title: const Text('Focus timer'), subtitle: const Text('Track focused work locally'), onTap: onTimer), ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.lock_outline, color: AppColors.blue), title: Text(hasPin ? 'Change app PIN' : 'Set app PIN'), subtitle: const Text('Protect the app on this device'), onTap: onPin)]))),
+      const SectionTitle(title: 'Privacy'),
+      const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: CardBox(child: Row(children: [Icon(Icons.offline_bolt_outlined, color: AppColors.green), SizedBox(width: 12), Expanded(child: Text('Your habits, journal, mood, measurements and focus data stay on this device. No account or cloud backup is required.', style: TextStyle(height: 1.4)))]))),
+    ]));
+  }
+}
+
+class Achievements extends StatelessWidget {
+  final List<Habit> habits;
+  const Achievements({super.key, required this.habits});
+  @override
+  Widget build(BuildContext context) {
+    final total = habits.fold<int>(0, (sum, habit) => sum + habit.totalCompletions());
+    final streak = habits.fold<int>(0, (max, habit) => habit.bestStreak() > max ? habit.bestStreak() : max);
+    final badges = [['🌱', 'First step', total >= 1], ['🔥', '7 day streak', streak >= 7], ['🏆', '30 day streak', streak >= 30], ['💯', '100 completions', total >= 100]];
+    return Wrap(spacing: 8, runSpacing: 8, children: badges.map((badge) { final unlocked = badge[2] as bool; return Container(width: 145, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: unlocked ? AppColors.soft : AppColors.bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)), child: Row(children: [Text(badge[0] as String, style: const TextStyle(fontSize: 22)), const SizedBox(width: 8), Expanded(child: Text(badge[1] as String, style: TextStyle(fontWeight: FontWeight.w800, color: unlocked ? AppColors.text : AppColors.muted)))])); }).toList());
+  }
+}
+
+class HabitDetail extends StatefulWidget {
+  final Habit habit;
+  final Future<void> Function() onChanged;
+  const HabitDetail({super.key, required this.habit, required this.onChanged});
+  @override State<HabitDetail> createState() => _HabitDetailState();
+}
+
+class _HabitDetailState extends State<HabitDetail> {
+  late DateTime month;
+  @override void initState() { super.initState(); final now = DateTime.now(); month = DateTime(now.year, now.month, 1); }
+  Future<void> toggle(DateTime day) async { setState(() => widget.habit.setDone(day, !widget.habit.isDone(day))); await widget.onChanged(); }
+  Future<void> addMeasurement() async { final value = await showDialog<double>(context: context, builder: (_) => MeasurementDialog(unit: widget.habit.unit)); if (value == null) return; setState(() => widget.habit.measurements[Habit.key(DateTime.now())] = value); await widget.onChanged(); }
+  Future<void> editJournal() async {
+    final key = Habit.key(DateTime.now());
+    final controller = TextEditingController(text: widget.habit.journal[key] ?? '');
+    final result = await showDialog<String>(context: context, builder: (_) => AlertDialog(title: const Text("Today's journal"), content: TextField(controller: controller, maxLines: 6, decoration: const InputDecoration(hintText: 'How did today go?')), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Save'))]));
+    controller.dispose(); if (result == null) return; setState(() => widget.habit.journal[key] = result.trim()); await widget.onChanged();
+  }
+  Future<void> editNotes() async {
+    final controller = TextEditingController(text: widget.habit.notes);
+    final result = await showDialog<String>(context: context, builder: (_) => AlertDialog(title: const Text('Habit notes'), content: TextField(controller: controller, maxLines: 6, decoration: const InputDecoration(hintText: 'Write general notes...')), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Save'))]));
+    controller.dispose(); if (result == null) return; setState(() => widget.habit.notes = result.trim()); await widget.onChanged();
+  }
+  @override
+  Widget build(BuildContext context) {
+    final habit = widget.habit;
+    final days = DateTime(month.year, month.month + 1, 0).day;
+    final rate = habit.completionRate(month).clamp(0.0, 1.0).toDouble();
+    final measurements = habit.measurements.entries.toList()..sort((a, b) => b.key.compareTo(a.key));
+    final journals = habit.journal.entries.toList()..sort((a, b) => b.key.compareTo(a.key));
+    return Scaffold(appBar: AppBar(title: Text(habit.name)), body: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      CardBox(child: Row(children: [SizedBox(width: 72, height: 72, child: CircularProgressIndicator(value: rate, strokeWidth: 8, backgroundColor: AppColors.soft, color: AppColors.blue)), const SizedBox(width: 16), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('🔥 ${habit.currentStreak()} day streak', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)), Text('Best: ${habit.bestStreak()} days'), Text('${(rate * 100).round()}% this month', style: const TextStyle(color: AppColors.muted))]))])),
+      SectionTitle(title: 'Goal'), CardBox(child: Text('${habit.goal} ${habit.unit} · ${habit.frequency}', style: const TextStyle(fontWeight: FontWeight.w800))),
+      SectionTitle(title: 'Calendar'),
+      CardBox(child: Column(children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [IconButton(onPressed: () => setState(() => month = DateTime(month.year, month.month - 1, 1)), icon: const Icon(Icons.chevron_left)), Text(DateFormat('MMMM yyyy').format(month), style: const TextStyle(fontWeight: FontWeight.w900)), IconButton(onPressed: () => setState(() => month = DateTime(month.year, month.month + 1, 1)), icon: const Icon(Icons.chevron_right))]), GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: days, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7), itemBuilder: (_, index) { final day = DateTime(month.year, month.month, index + 1); final scheduled = habit.isScheduled(day); final done = habit.isDone(day); return InkWell(onTap: scheduled ? () => toggle(day) : null, child: Container(margin: const EdgeInsets.all(3), decoration: BoxDecoration(color: done ? AppColors.blue : (scheduled ? Colors.white : AppColors.bg), borderRadius: BorderRadius.circular(8), border: Border.all(color: scheduled ? AppColors.border : Colors.transparent)), child: Center(child: Text('${index + 1}', style: TextStyle(fontWeight: FontWeight.w800, color: done ? Colors.white : AppColors.text))))); })])),
+      SectionTitle(title: 'Measurements', onAdd: addMeasurement, label: '＋ Add value'), CardBox(child: measurements.isEmpty ? const Text('No measurements yet.', style: TextStyle(color: AppColors.muted)) : Column(children: measurements.take(10).map((entry) => ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.show_chart, color: AppColors.blue), title: Text('${entry.value} ${habit.unit}'), subtitle: Text(entry.key))).toList())),
+      SectionTitle(title: 'Journal', onAdd: editJournal, label: '＋ Today'), CardBox(child: journals.isEmpty ? const Text('No journal entries yet.', style: TextStyle(color: AppColors.muted)) : Column(children: journals.take(7).map((entry) => ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.menu_book_outlined, color: AppColors.blue), title: Text(entry.key), subtitle: Text(entry.value, maxLines: 3, overflow: TextOverflow.ellipsis)).toList())),
+      SectionTitle(title: 'Notes', onAdd: editNotes, label: 'Edit'), CardBox(child: Text(habit.notes.isEmpty ? 'No notes yet.' : habit.notes, style: const TextStyle(color: AppColors.muted, height: 1.5))),
+      const SizedBox(height: 20), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => toggle(DateTime.now()), icon: Icon(habit.isDone(DateTime.now()) ? Icons.undo : Icons.check), label: Text(habit.isDone(DateTime.now()) ? 'Mark today incomplete' : 'Mark today complete'))),
+    ])));
+  }
+}
+
+class HabitEdit {
+  String name, category, unit, frequency, notes;
+  int goal;
+  List<int> weekdays;
+  bool pinned, active, delete;
+  List<String> tags;
+  HabitEdit({this.name = '', this.category = 'Daily', this.goal = 1, this.unit = 'times', this.frequency = 'Every day', List<int>? weekdays, this.pinned = false, this.active = true, List<String>? tags, this.notes = '', this.delete = false}) : weekdays = weekdays ?? [1, 2, 3, 4, 5, 6, 7], tags = tags ?? [];
+  Habit toHabit() => Habit(id: DateTime.now().microsecondsSinceEpoch.toString(), name: name.trim(), category: category, goal: goal, unit: unit, frequency: frequency, weekdays: weekdays, pinned: pinned, active: active, tags: tags, notes: notes);
+}
+
+class HabitEditor extends StatefulWidget {
+  final Habit? habit;
+  const HabitEditor({super.key, this.habit});
+  @override State<HabitEditor> createState() => _HabitEditorState();
+}
+
+class _HabitEditorState extends State<HabitEditor> {
+  late TextEditingController name, goal, unit, category, tags, notes;
+  late String frequency;
+  late List<int> weekdays;
+  late bool pinned, active;
+  @override
+  void initState() {
+    super.initState();
+    final habit = widget.habit;
+    name = TextEditingController(text: habit?.name ?? ''); goal = TextEditingController(text: '${habit?.goal ?? 1}'); unit = TextEditingController(text: habit?.unit ?? 'times'); category = TextEditingController(text: habit?.category ?? 'Daily'); tags = TextEditingController(text: habit?.tags.join(', ') ?? ''); notes = TextEditingController(text: habit?.notes ?? ''); frequency = habit?.frequency ?? 'Every day'; weekdays = List<int>.from(habit?.weekdays ?? [1, 2, 3, 4, 5, 6, 7]); pinned = habit?.pinned ?? false; active = habit?.active ?? true;
+  }
+  @override void dispose() { name.dispose(); goal.dispose(); unit.dispose(); category.dispose(); tags.dispose(); notes.dispose(); super.dispose(); }
+  void submit() {
+    final parsed = int.tryParse(goal.text.trim()) ?? 1;
+    final result = HabitEdit(name: name.text, category: category.text.trim().isEmpty ? 'Daily' : category.text.trim(), goal: parsed.clamp(1, 1000000).toInt(), unit: unit.text.trim().isEmpty ? 'times' : unit.text.trim(), frequency: frequency, weekdays: weekdays, pinned: pinned, active: active, tags: tags.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(), notes: notes.text.trim());
+    Navigator.pop(context, result);
+  }
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(padding: EdgeInsets.only(bottom: bottom), child: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(widget.habit == null ? 'New habit' : 'Edit habit', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)), const SizedBox(height: 16),
+      TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: 'Habit name')), const SizedBox(height: 10),
+      Row(children: [Expanded(child: TextField(controller: goal, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Goal'))), const SizedBox(width: 10), Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: 'Unit')))]), const SizedBox(height: 10),
+      TextField(controller: category, decoration: const InputDecoration(labelText: 'Category')), const SizedBox(height: 10),
+      DropdownButtonFormField<String>(value: frequency, decoration: const InputDecoration(labelText: 'Frequency'), items: const [DropdownMenuItem(value: 'Every day', child: Text('Every day')), DropdownMenuItem(value: 'Weekdays', child: Text('Weekdays')), DropdownMenuItem(value: 'Custom', child: Text('Custom weekdays'))], onChanged: (value) => setState(() => frequency = value ?? 'Every day')),
+      if (frequency == 'Custom') Padding(padding: const EdgeInsets.only(top: 10), child: Wrap(spacing: 6, children: List.generate(7, (index) { final day = index + 1; return FilterChip(label: Text(DateFormat('EEE').format(DateTime(2026, 1, 5 + index)).substring(0, 2)), selected: weekdays.contains(day), onSelected: (selected) { setState(() { if (selected && !weekdays.contains(day)) weekdays.add(day); if (!selected) weekdays.remove(day); }); }); }))),
+      const SizedBox(height: 10), TextField(controller: tags, decoration: const InputDecoration(labelText: 'Tags', hintText: 'health, study, work')), const SizedBox(height: 10), TextField(controller: notes, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes')),
+      SwitchListTile(contentPadding: EdgeInsets.zero, value: pinned, onChanged: (value) => setState(() => pinned = value), title: const Text('Pin habit')), SwitchListTile(contentPadding: EdgeInsets.zero, value: active, onChanged: (value) => setState(() => active = value), title: const Text('Active')),
+      Row(children: [if (widget.habit != null) Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context, HabitEdit(delete: true)), child: const Text('Delete'))), if (widget.habit != null) const SizedBox(width: 10), Expanded(child: FilledButton(onPressed: submit, child: const Text('Save habit')))]),
+    ]))));
+  }
+}
+
+class TodoEdit { String title, category; int priority; DateTime? due; TodoEdit({this.title = '', this.priority = 1, this.category = 'General', this.due}); }
+
+class TodoEditor extends StatefulWidget {
+  final Map<String, dynamic>? existing;
+  const TodoEditor({super.key, this.existing});
+  @override State<TodoEditor> createState() => _TodoEditorState();
+}
+
+class _TodoEditorState extends State<TodoEditor> {
+  late TextEditingController title, category;
+  late int priority;
+  DateTime? due;
+  @override
+  void initState() { super.initState(); final item = widget.existing; title = TextEditingController(text: '${item?['title'] ?? ''}'); category = TextEditingController(text: '${item?['category'] ?? 'General'}'); priority = (item?['priority'] as num?)?.toInt() ?? 1; final raw = '${item?['due'] ?? ''}'; due = raw.isEmpty ? null : DateTime.tryParse(raw); }
+  @override void dispose() { title.dispose(); category.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => AlertDialog(title: Text(widget.existing == null ? 'Add task' : 'Edit task'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: title, autofocus: true, decoration: const InputDecoration(labelText: 'Task')), const SizedBox(height: 10), TextField(controller: category, decoration: const InputDecoration(labelText: 'Category')), const SizedBox(height: 10), DropdownButtonFormField<int>(value: priority, decoration: const InputDecoration(labelText: 'Priority'), items: const [DropdownMenuItem(value: 1, child: Text('Low')), DropdownMenuItem(value: 2, child: Text('Medium')), DropdownMenuItem(value: 3, child: Text('High'))], onChanged: (value) => setState(() => priority = value ?? 1)), const SizedBox(height: 10), OutlinedButton.icon(onPressed: () async { final value = await showDatePicker(context: context, firstDate: DateTime.now().subtract(const Duration(days: 365)), lastDate: DateTime.now().add(const Duration(days: 3650)), initialDate: due ?? DateTime.now()); if (value != null) setState(() => due = value); }, icon: const Icon(Icons.event_outlined), label: Text(due == null ? 'Add due date' : DateFormat('d MMM yyyy').format(due!))) ])), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, TodoEdit(title: title.text, priority: priority, category: category.text, due: due)), child: const Text('Save'))]);
+}
+
+class FocusTimer extends StatefulWidget {
+  final StorageService storage;
+  final DateTime date;
+  final int initial;
+  final ValueChanged<int> onSaved;
+  const FocusTimer({super.key, required this.storage, required this.date, required this.initial, required this.onSaved});
+  @override State<FocusTimer> createState() => _FocusTimerState();
+}
+
+class _FocusTimerState extends State<FocusTimer> {
+  late int seconds;
+  Timer? timer;
+  @override void initState() { super.initState(); seconds = widget.initial; }
+  @override void dispose() { timer?.cancel(); super.dispose(); }
+  void toggle() { if (timer != null) { timer!.cancel(); timer = null; setState(() {}); return; } timer = Timer.periodic(const Duration(seconds: 1), (_) { if (mounted) setState(() => seconds++); }); setState(() {}); }
+  Future<void> save() async { final data = await widget.storage.loadTimerSeconds(); data[Habit.key(widget.date)] = seconds; await widget.storage.saveTimerSeconds(data); widget.onSaved(seconds); }
+  @override
+  Widget build(BuildContext context) { final hours = seconds ~/ 3600; final minutes = (seconds % 3600) ~/ 60; final secs = seconds % 60; final display = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}'; return Scaffold(appBar: AppBar(title: const Text('Focus timer')), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(display, style: const TextStyle(fontSize: 52, fontWeight: FontWeight.w900)), const SizedBox(height: 24), FilledButton.icon(onPressed: toggle, icon: Icon(timer == null ? Icons.play_arrow : Icons.pause), label: Text(timer == null ? 'Start' : 'Pause')), const SizedBox(height: 10), OutlinedButton(onPressed: save, child: const Text('Save session'))]))); }
+}
+
+class MeasurementDialog extends StatefulWidget {
+  final String unit;
+  const MeasurementDialog({super.key, required this.unit});
+  @override State<MeasurementDialog> createState() => _MeasurementDialogState();
+}
+class _MeasurementDialogState extends State<MeasurementDialog> {
+  final controller = TextEditingController();
+  @override void dispose() { controller.dispose(); super.dispose(); }
+  @override Widget build(BuildContext context) => AlertDialog(title: Text('Add measurement (${widget.unit})'), content: TextField(controller: controller, autofocus: true, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(hintText: 'Value')), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, double.tryParse(controller.text.trim())), child: const Text('Save'))]);
+}
+
+class PinDialog extends StatefulWidget {
+  final String? current;
+  const PinDialog({super.key, this.current});
+  @override State<PinDialog> createState() => _PinDialogState();
+}
+class _PinDialogState extends State<PinDialog> {
+  final controller = TextEditingController();
+  @override void dispose() { controller.dispose(); super.dispose(); }
+  @override Widget build(BuildContext context) { final enabled = widget.current != null && widget.current!.isNotEmpty; return AlertDialog(title: Text(enabled ? 'Change PIN' : 'Set app PIN'), content: TextField(controller: controller, obscureText: true, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(hintText: '4–6 digits')), actions: [if (enabled) TextButton(onPressed: () => Navigator.pop(context, ''), child: const Text('Disable')), TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save'))]); }
+}
+
+class LockDialog extends StatefulWidget {
+  final String pin;
+  const LockDialog({super.key, required this.pin});
+  @override State<LockDialog> createState() => _LockDialogState();
+}
+class _LockDialogState extends State<LockDialog> {
+  final controller = TextEditingController();
+  String? error;
+  @override void dispose() { controller.dispose(); super.dispose(); }
+  @override Widget build(BuildContext context) => AlertDialog(title: const Text('Enter PIN'), content: TextField(controller: controller, obscureText: true, keyboardType: TextInputType.number, onChanged: (_) => setState(() => error = null), decoration: InputDecoration(errorText: error)), actions: [FilledButton(onPressed: () { if (controller.text.trim() == widget.pin) { Navigator.pop(context, true); } else { setState(() => error = 'Incorrect PIN'); } }, child: const Text('Unlock'))]);
+}
+
+class LockScreen extends StatelessWidget {
+  final VoidCallback onUnlock;
+  const LockScreen({super.key, required this.onUnlock});
+  @override
+  Widget build(BuildContext context) => Scaffold(body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const CircleAvatar(radius: 42, child: Icon(Icons.lock_outline, size: 40)), const SizedBox(height: 18), const Text('Habit Tracker is locked', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)), const SizedBox(height: 12), FilledButton.icon(onPressed: onUnlock, icon: const Icon(Icons.lock_open), label: const Text('Unlock'))])));
+}
