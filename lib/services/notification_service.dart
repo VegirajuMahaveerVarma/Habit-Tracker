@@ -8,11 +8,22 @@ const _alarmChannelName = 'Habit alarms';
 const _alarmChannelDescription = 'Sounding daily alarms for your habits';
 const _snoozeActionId = 'remind_later';
 
+Future<void> _setDeviceTimezone() async {
+  try {
+    final timezone = await FlutterTimezone.getLocalTimezone();
+    tz.setLocalLocation(tz.getLocation(timezone.identifier));
+  } catch (_) {
+    // Keep the timezone package default if the native timezone cannot be read.
+  }
+}
+
 @pragma('vm:entry-point')
 Future<void> notificationTapBackground(NotificationResponse response) async {
   if (response.actionId != _snoozeActionId) return;
 
   tz.initializeTimeZones();
+  await _setDeviceTimezone();
+
   final plugin = FlutterLocalNotificationsPlugin();
   const settings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -31,8 +42,8 @@ Future<void> notificationTapBackground(NotificationResponse response) async {
   try {
     await plugin.zonedSchedule(
       id,
-      'Habit reminder 🔔',
-      'Time for: $habitName',
+      habitName,
+      'Daily habit reminder',
       scheduled,
       details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -41,8 +52,8 @@ Future<void> notificationTapBackground(NotificationResponse response) async {
   } catch (_) {
     await plugin.zonedSchedule(
       id,
-      'Habit reminder 🔔',
-      'Time for: $habitName',
+      habitName,
+      'Daily habit reminder',
       scheduled,
       details,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
@@ -93,12 +104,7 @@ class NotificationService {
     if (_initialized) return;
 
     tz.initializeTimeZones();
-    try {
-      final timezone = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(timezone.identifier));
-    } catch (_) {
-      // Keep the package default if the native timezone cannot be read.
-    }
+    await _setDeviceTimezone();
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
@@ -142,8 +148,8 @@ class NotificationService {
     try {
       await _plugin.zonedSchedule(
         id,
-        'Habit reminder 🔔',
-        'Time for: $habitName',
+        habitName,
+        'Daily habit reminder',
         scheduled,
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -153,8 +159,8 @@ class NotificationService {
     } catch (_) {
       await _plugin.zonedSchedule(
         id,
-        'Habit reminder 🔔',
-        'Time for: $habitName',
+        habitName,
+        'Daily habit reminder',
         scheduled,
         details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
@@ -176,8 +182,8 @@ class NotificationService {
     await initialize();
     await _plugin.show(
       999999,
-      'Habit Tracker test 🔔',
-      'This is an alarm-style notification.',
+      'Habit alarm test',
+      'Sound and alarm actions are working.',
       _alarmDetails(),
     );
   }
