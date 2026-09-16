@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/habit.dart';
+import '../models/reminder_settings.dart';
 
 class StorageService {
   static const _habitsKey = 'habits_v1';
   static const _todosKey = 'todos_v1';
+  static const _reminderKey = 'reminder_settings_v1';
 
   Future<List<Habit>> loadHabits() async {
     try {
@@ -41,6 +43,24 @@ class StorageService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_todosKey, jsonEncode(todos));
+    } catch (_) {}
+  }
+
+  Future<ReminderSettings> loadReminderSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_reminderKey);
+      if (raw == null) return const ReminderSettings();
+      return ReminderSettings.fromJson(Map<String, dynamic>.from(jsonDecode(raw) as Map));
+    } catch (_) {
+      return const ReminderSettings();
+    }
+  }
+
+  Future<void> saveReminderSettings(ReminderSettings settings) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_reminderKey, jsonEncode(settings.toJson()));
     } catch (_) {}
   }
 
