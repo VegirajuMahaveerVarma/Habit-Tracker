@@ -3,18 +3,17 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
-const _alarmChannelId = 'habit_alarm_v2';
+const _alarmChannelId = 'habit_alarm_v3';
 const _alarmChannelName = 'Habit alarms';
 const _alarmChannelDescription = 'Sounding daily alarms for your habits';
 const _snoozeActionId = 'remind_later';
+const _dismissActionId = 'dismiss';
 
 Future<void> _setDeviceTimezone() async {
   try {
     final timezone = await FlutterTimezone.getLocalTimezone();
     tz.setLocalLocation(tz.getLocation(timezone.identifier));
-  } catch (_) {
-    // Keep the timezone package default if the native timezone cannot be read.
-  }
+  } catch (_) {}
 }
 
 @pragma('vm:entry-point')
@@ -37,7 +36,6 @@ Future<void> notificationTapBackground(NotificationResponse response) async {
   final scheduled = tz.TZDateTime.now(tz.local).add(
     const Duration(minutes: 10),
   );
-  final details = _alarmDetails();
 
   try {
     await plugin.zonedSchedule(
@@ -45,7 +43,7 @@ Future<void> notificationTapBackground(NotificationResponse response) async {
       habitName,
       'Daily habit reminder',
       scheduled,
-      details,
+      _alarmDetails(),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: habitName,
     );
@@ -55,40 +53,45 @@ Future<void> notificationTapBackground(NotificationResponse response) async {
       habitName,
       'Daily habit reminder',
       scheduled,
-      details,
+      _alarmDetails(),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       payload: habitName,
     );
   }
 }
 
-NotificationDetails _alarmDetails() {
-  return const NotificationDetails(
-    android: AndroidNotificationDetails(
-      _alarmChannelId,
-      _alarmChannelName,
-      channelDescription: _alarmChannelDescription,
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-      audioAttributesUsage: AudioAttributesUsage.alarm,
-      category: AndroidNotificationCategory.alarm,
-      visibility: NotificationVisibility.public,
-      actions: <AndroidNotificationAction>[
-        AndroidNotificationAction(
-          _snoozeActionId,
-          'Remind me later',
-          cancelNotification: true,
-        ),
-        AndroidNotificationAction(
-          'dismiss',
-          'Dismiss',
-          cancelNotification: true,
-        ),
-      ],
-    ),
+AndroidNotificationDetails _androidAlarmDetails() {
+  return const AndroidNotificationDetails(
+    _alarmChannelId,
+    _alarmChannelName,
+    channelDescription: _alarmChannelDescription,
+    importance: Importance.max,
+    priority: Priority.max,
+    playSound: true,
+    enableVibration: true,
+    audioAttributesUsage: AudioAttributesUsage.alarm,
+    category: AndroidNotificationCategory.alarm,
+    visibility: NotificationVisibility.public,
+    fullScreenIntent: true,
+    autoCancel: false,
+    ongoing: true,
+    actions: <AndroidNotificationAction>[
+      AndroidNotificationAction(
+        _snoozeActionId,
+        'Remind me later',
+        cancelNotification: true,
+      ),
+      AndroidNotificationAction(
+        _dismissActionId,
+        'Dismiss',
+        cancelNotification: true,
+      ),
+    ],
   );
+}
+
+NotificationDetails _alarmDetails() {
+  return NotificationDetails(android: _androidAlarmDetails());
 }
 
 class NotificationService {
@@ -115,8 +118,22 @@ class NotificationService {
 
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
+
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _alarmChannelId,
+        _alarmChannelName,
+        description: _alarmChannelDescription,
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      ),
+    );
+
     await androidPlugin?.requestNotificationsPermission();
     await androidPlugin?.requestExactAlarmsPermission();
+    await androidPlugin?.requestFullScreenIntentPermission();
 
     _initialized = true;
   }
@@ -143,15 +160,13 @@ class NotificationService {
       scheduled = scheduled.add(const Duration(days: 1));
     }
 
-    final details = _alarmDetails();
-
     try {
       await _plugin.zonedSchedule(
         id,
         habitName,
         'Daily habit reminder',
         scheduled,
-        details,
+        _alarmDetails(),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.time,
         payload: habitName,
@@ -162,7 +177,7 @@ class NotificationService {
         habitName,
         'Daily habit reminder',
         scheduled,
-        details,
+        _alarmDetails(),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.time,
         payload: habitName,
