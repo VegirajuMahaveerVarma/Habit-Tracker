@@ -19,6 +19,8 @@ jobs:
         run: flutter create --platforms=android .
       - name: Enable Android core library desugaring
         run: dart run tool/enable_android_desugaring.dart
+      - name: Configure Android notification permissions
+        run: dart run tool/configure_android_notifications.dart
       - name: Get dependencies
         run: flutter pub get
       - name: Analyze
