@@ -3,6 +3,83 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+const _alarmChannelId = 'habit_alarm_v2';
+const _alarmChannelName = 'Habit alarms';
+const _alarmChannelDescription = 'Sounding daily alarms for your habits';
+const _snoozeActionId = 'remind_later';
+
+@pragma('vm:entry-point')
+Future<void> notificationTapBackground(NotificationResponse response) async {
+  if (response.actionId != _snoozeActionId) return;
+
+  tz.initializeTimeZones();
+  final plugin = FlutterLocalNotificationsPlugin();
+  const settings = InitializationSettings(
+    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+  );
+  await plugin.initialize(settings);
+
+  final id = response.id;
+  final habitName = (response.payload ?? '').trim();
+  if (id == null || habitName.isEmpty) return;
+
+  final scheduled = tz.TZDateTime.now(tz.local).add(
+    const Duration(minutes: 10),
+  );
+  final details = _alarmDetails();
+
+  try {
+    await plugin.zonedSchedule(
+      id,
+      'Habit reminder 🔔',
+      'Time for: $habitName',
+      scheduled,
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload: habitName,
+    );
+  } catch (_) {
+    await plugin.zonedSchedule(
+      id,
+      'Habit reminder 🔔',
+      'Time for: $habitName',
+      scheduled,
+      details,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      payload: habitName,
+    );
+  }
+}
+
+NotificationDetails _alarmDetails() {
+  return const NotificationDetails(
+    android: AndroidNotificationDetails(
+      _alarmChannelId,
+      _alarmChannelName,
+      channelDescription: _alarmChannelDescription,
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          _snoozeActionId,
+          'Remind me later',
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          'dismiss',
+          'Dismiss',
+          cancelNotification: true,
+        ),
+      ],
+    ),
+  );
+}
+
 class NotificationService {
   NotificationService._();
   static final instance = NotificationService._();
@@ -16,10 +93,6 @@ class NotificationService {
     if (_initialized) return;
 
     tz.initializeTimeZones();
-
-    // timezone's default location is not guaranteed to be the phone's
-    // timezone. Explicitly load the Android device timezone (for example,
-    // Asia/Kolkata) before creating scheduled dates.
     try {
       final timezone = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(timezone.identifier));
@@ -29,7 +102,10 @@ class NotificationService {
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
-    await _plugin.initialize(settings);
+    await _plugin.initialize(
+      settings,
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+    );
 
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
@@ -61,15 +137,7 @@ class NotificationService {
       scheduled = scheduled.add(const Duration(days: 1));
     }
 
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'habit_reminders',
-        'Habit reminders',
-        channelDescription: 'Daily reminders for your habits',
-        importance: Importance.high,
-        priority: Priority.high,
-      ),
-    );
+    final details = _alarmDetails();
 
     try {
       await _plugin.zonedSchedule(
@@ -80,6 +148,7 @@ class NotificationService {
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.time,
+        payload: habitName,
       );
     } catch (_) {
       await _plugin.zonedSchedule(
@@ -90,6 +159,7 @@ class NotificationService {
         details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.time,
+        payload: habitName,
       );
     }
   }
@@ -107,16 +177,8 @@ class NotificationService {
     await _plugin.show(
       999999,
       'Habit Tracker test 🔔',
-      'Notifications are working correctly.',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'habit_reminders',
-          'Habit reminders',
-          channelDescription: 'Daily reminders for your habits',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-      ),
+      'This is an alarm-style notification.',
+      _alarmDetails(),
     );
   }
 }
