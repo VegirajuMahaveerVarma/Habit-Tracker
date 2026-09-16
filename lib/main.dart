@@ -95,12 +95,12 @@ class _AppShellState extends State<AppShell> {
     await notifications.cancelAll();
     if (!settings.enabled) return;
 
-    for (final habit in habits.where((item) => item.active)) {
+    for (final habit in habits.where((item) => item.active && item.reminderEnabled)) {
       await notifications.scheduleDaily(
         id: _notificationId(habit),
         habitName: habit.name,
-        hour: settings.hour,
-        minute: settings.minute,
+        hour: habit.reminderHour,
+        minute: habit.reminderMinute,
       );
     }
   }
@@ -130,6 +130,9 @@ class _AppShellState extends State<AppShell> {
           name: result.name.trim(),
           category: result.category,
           goal: result.goal,
+          reminderEnabled: result.reminderEnabled,
+          reminderHour: result.reminderHour,
+          reminderMinute: result.reminderMinute,
         ),
       );
     });
@@ -178,6 +181,9 @@ class _AppShellState extends State<AppShell> {
     habit.name = result.name.trim();
     habit.category = result.category;
     habit.goal = result.goal;
+    habit.reminderEnabled = result.reminderEnabled;
+    habit.reminderHour = result.reminderHour;
+    habit.reminderMinute = result.reminderMinute;
     setState(() {});
     await storage.saveHabits(habits);
     if (reminders.enabled) await _scheduleReminders(reminders);
@@ -680,6 +686,19 @@ class HabitTile extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (habit.reminderEnabled) ...[
+                        const SizedBox(height: 7),
+                        Row(
+                          children: [
+                            const Icon(Icons.alarm, size: 14, color: AppColors.blue),
+                            const SizedBox(width: 5),
+                            Text(
+                              TimeOfDay(hour: habit.reminderHour, minute: habit.reminderMinute).format(context),
+                              style: const TextStyle(fontSize: 11, color: AppColors.blue, fontWeight: FontWeight.w800),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 9),
                       LinearProgressIndicator(
                         value: progress,
@@ -736,6 +755,16 @@ class DailyPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final days = DateTime(date.year, date.month + 1, 0).day;
+    final orderedHabits = [...habits]..sort((a, b) {
+      if (a.reminderEnabled != b.reminderEnabled) return a.reminderEnabled ? -1 : 1;
+      if (a.reminderEnabled) {
+        final aMinutes = a.reminderHour * 60 + a.reminderMinute;
+        final bMinutes = b.reminderHour * 60 + b.reminderMinute;
+        final byTime = aMinutes.compareTo(bMinutes);
+        if (byTime != 0) return byTime;
+      }
+      return 0;
+    });
 
     return Column(
       children: [
@@ -812,7 +841,7 @@ class DailyPage extends StatelessWidget {
                 )
               : ListView(
                   padding: const EdgeInsets.only(top: 10, bottom: 20),
-                  children: habits
+                  children: orderedHabits
                       .map(
                         (habit) => HabitTile(
                           habit: habit,
@@ -1321,12 +1350,18 @@ class HabitEditResult {
   final String name;
   final String category;
   final int goal;
+  final bool reminderEnabled;
+  final int reminderHour;
+  final int reminderMinute;
   final bool delete;
 
   const HabitEditResult({
     this.name = '',
     this.category = 'Daily',
     this.goal = 30,
+    this.reminderEnabled = false,
+    this.reminderHour = 20,
+    this.reminderMinute = 0,
     this.delete = false,
   });
 }
@@ -1344,6 +1379,8 @@ class _HabitEditorSheetState extends State<HabitEditorSheet> {
   late final TextEditingController controller;
   late String category;
   late double goal;
+  late bool reminderEnabled;
+  late TimeOfDay reminderTime;
 
   static const categories = [
     'Daily',
@@ -1360,6 +1397,11 @@ class _HabitEditorSheetState extends State<HabitEditorSheet> {
         ? widget.habit!.category
         : 'Daily';
     goal = (widget.habit?.goal ?? 30).clamp(1, 31).toDouble();
+    reminderEnabled = widget.habit?.reminderEnabled ?? false;
+    reminderTime = TimeOfDay(
+      hour: widget.habit?.reminderHour ?? 20,
+      minute: widget.habit?.reminderMinute ?? 0,
+    );
   }
 
   @override
@@ -1378,6 +1420,9 @@ class _HabitEditorSheetState extends State<HabitEditorSheet> {
         name: name,
         category: category,
         goal: goal.round(),
+        reminderEnabled: reminderEnabled,
+        reminderHour: reminderTime.hour,
+        reminderMinute: reminderTime.minute,
       ),
     );
   }
@@ -1438,7 +1483,7 @@ class _HabitEditorSheetState extends State<HabitEditorSheet> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: category,
+                initialValue: category,
                 decoration: const InputDecoration(
                   labelText: 'Category',
                   prefixIcon: Icon(Icons.category_outlined),
@@ -1454,6 +1499,36 @@ class _HabitEditorSheetState extends State<HabitEditorSheet> {
                 onChanged: (value) {
                   if (value != null) setState(() => category = value);
                 },
+              ),
+              const SizedBox(height: 14),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.bg,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      title: const Text('Daily reminder', style: TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: Text(reminderEnabled ? 'Reminder is on' : 'Reminder is off'),
+                      secondary: const Icon(Icons.notifications_active_outlined, color: AppColors.blue),
+                      value: reminderEnabled,
+                      onChanged: (value) => setState(() => reminderEnabled = value),
+                    ),
+                    if (reminderEnabled)
+                      ListTile(
+                        leading: const Icon(Icons.alarm, color: AppColors.blue),
+                        title: const Text('Reminder time', style: TextStyle(fontWeight: FontWeight.w800)),
+                        subtitle: Text(reminderTime.format(context)),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          final picked = await showTimePicker(context: context, initialTime: reminderTime);
+                          if (picked != null) setState(() => reminderTime = picked);
+                        },
+                      ),
+                  ],
+                ),
               ),
               const SizedBox(height: 14),
               Container(
@@ -1755,7 +1830,7 @@ class ProfilePage extends StatelessWidget {
                     ),
                     subtitle: Text(
                       reminders.enabled
-                          ? 'Daily at ${TimeOfDay(hour: reminders.hour, minute: reminders.minute).format(context)}'
+                          ? 'On · each habit has its own reminder time'
                           : 'Off',
                     ),
                     trailing: const Icon(Icons.chevron_right),
