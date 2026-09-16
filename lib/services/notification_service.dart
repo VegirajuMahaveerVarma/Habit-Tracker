@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -15,6 +16,17 @@ class NotificationService {
     if (_initialized) return;
 
     tz.initializeTimeZones();
+
+    // timezone's default location is not guaranteed to be the phone's
+    // timezone. Explicitly load the Android device timezone (for example,
+    // Asia/Kolkata) before creating scheduled dates.
+    try {
+      final timezone = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(timezone.identifier));
+    } catch (_) {
+      // Keep the package default if the native timezone cannot be read.
+    }
+
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
     await _plugin.initialize(settings);
@@ -70,9 +82,6 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time,
       );
     } catch (_) {
-      // Android 12+ can block exact alarms unless the user grants the
-      // special Alarms & reminders access. Fall back to an inexact alarm so
-      // the habit reminder still works without that special access.
       await _plugin.zonedSchedule(
         id,
         'Habit reminder 🔔',
