@@ -15,6 +15,7 @@ Future<void> main() async {
     '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
     '    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>',
     '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>',
+    '    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>',
   ];
 
   for (final permission in permissions) {
@@ -31,5 +32,5 @@ Future<void> main() async {
   }
 
   await file.writeAsString(text);
-  stdout.writeln('Android notification and exact-alarm permissions are configured.');
+  stdout.writeln('Android alarm, notification, boot, and full-screen permissions are configured.');
 }
