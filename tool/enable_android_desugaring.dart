@@ -1,52 +1,78 @@
 import 'dart:io';
 
 Future<void> main() async {
-  final file = File('android/app/build.gradle.kts');
-  if (!file.existsSync()) {
+  final candidates = <File>[
+    File('android/app/build.gradle.kts'),
+    File('android/app/build.gradle'),
+  ];
+
+  File? file;
+  for (final candidate in candidates) {
+    if (candidate.existsSync()) {
+      file = candidate;
+      break;
+    }
+  }
+
+  if (file == null) {
     stderr.writeln(
-      'android/app/build.gradle.kts was not found. Run flutter create --platforms=android . first.',
+      'Could not find android/app/build.gradle.kts or android/app/build.gradle. '
+      'Run flutter create --platforms=android . first.',
     );
     exitCode = 1;
     return;
   }
 
   var text = await file.readAsString();
+  final isKts = file.path.endsWith('.kts');
 
-  if (!text.contains('isCoreLibraryDesugaringEnabled = true')) {
-    const marker = 'compileOptions {';
-    final index = text.indexOf(marker);
-    if (index < 0) {
-      // Recent Flutter templates can omit an explicit compileOptions block.
-      // Add one inside the android { ... } block, immediately after its opening.
-      const androidMarker = 'android {';
-      final androidIndex = text.indexOf(androidMarker);
-      if (androidIndex < 0) {
-        stderr.writeln('Could not find the android block in android/app/build.gradle.kts');
-        exitCode = 1;
-        return;
-      }
-      final insertAt = androidIndex + androidMarker.length;
-      text = '${text.substring(0, insertAt)}\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n    }${text.substring(insertAt)}';
-    } else {
-      final lineEnd = text.indexOf('\n', index);
-      final insertAt = lineEnd < 0 ? text.length : lineEnd + 1;
-      text = '${text.substring(0, insertAt)}        isCoreLibraryDesugaringEnabled = true\n${text.substring(insertAt)}';
-    }
-  }
-
-  if (!text.contains('coreLibraryDesugaring(')) {
-    const marker = 'dependencies {';
-    final index = text.indexOf(marker);
-    if (index < 0) {
-      stderr.writeln('Could not find the dependencies block in android/app/build.gradle.kts');
+  // Add core library desugaring to the android block.
+  if (!text.contains('isCoreLibraryDesugaringEnabled = true') &&
+      !text.contains('coreLibraryDesugaringEnabled true')) {
+    final androidIndex = text.indexOf(RegExp(r'\bandroid\s*\{'));
+    if (androidIndex < 0) {
+      stderr.writeln('Could not find the android { ... } block in ${file.path}');
       exitCode = 1;
       return;
     }
-    final lineEnd = text.indexOf('\n', index);
+
+    final androidOpen = text.indexOf('{', androidIndex);
+    final lineEnd = text.indexOf('\n', androidOpen);
     final insertAt = lineEnd < 0 ? text.length : lineEnd + 1;
-    text = '${text.substring(0, insertAt)}    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n${text.substring(insertAt)}';
+
+    final block = isKts
+        ? '    compileOptions {\n'
+          '        sourceCompatibility = JavaVersion.VERSION_11\n'
+          '        targetCompatibility = JavaVersion.VERSION_11\n'
+          '        isCoreLibraryDesugaringEnabled = true\n'
+          '    }\n'
+        : '    compileOptions {\n'
+          '        sourceCompatibility JavaVersion.VERSION_11\n'
+          '        targetCompatibility JavaVersion.VERSION_11\n'
+          '        coreLibraryDesugaringEnabled true\n'
+          '    }\n';
+
+    text = '${text.substring(0, insertAt)}$block${text.substring(insertAt)}';
+  }
+
+  // Add the desugaring dependency. Flutter's newest Android templates may not
+  // create a dependencies block, so create one when necessary.
+  if (!text.contains('desugar_jdk_libs')) {
+    final dependenciesIndex = text.indexOf(RegExp(r'\bdependencies\s*\{'));
+    final dependency = isKts
+        ? '    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n'
+        : "    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'\n";
+
+    if (dependenciesIndex >= 0) {
+      final dependenciesOpen = text.indexOf('{', dependenciesIndex);
+      final lineEnd = text.indexOf('\n', dependenciesOpen);
+      final insertAt = lineEnd < 0 ? text.length : lineEnd + 1;
+      text = '${text.substring(0, insertAt)}$dependency${text.substring(insertAt)}';
+    } else {
+      text = '$text\n\ndependencies {\n$dependency}\n';
+    }
   }
 
   await file.writeAsString(text);
-  stdout.writeln('Android core library desugaring is enabled.');
+  stdout.writeln('Android core library desugaring is enabled in ${file.path}.');
 }
