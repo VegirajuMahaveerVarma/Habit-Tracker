@@ -1,0 +1,113 @@
+name: Repair HabitUs UI
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: "!contains(github.event.head_commit.message, '[skip ui repair]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Repair generated UI syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('lib/app.dart')
+          s = p.read_text(encoding='utf-8')
+          replacements = [
+              ("textStyle: const TextStyle(fontWeight: FontWeight.w700))), home:", "textStyle: const TextStyle(fontWeight: FontWeight.w700)))), home:"),
+              ("if(action!=null)action!]);}", "if(action!=null)action!]));}"),
+              ("final List<String>items,;", "final List<String>items;"),
+              ("child:Text('🔥 ${h.currentStreak()} day streak\\\nBest ${h.bestStreak()} days · ${(rate*100).round()}% this month'", "child:Text('🔥 ${h.currentStreak()} day streak\\nBest ${h.bestStreak()} days · ${(rate*100).round()}% this month'"),
+          ]
+          for a,b in replacements:
+              s = s.replace(a,b)
+
+          start = s.index('class _DashboardState')
+          end = s.index('\nclass _Chips', start)
+          dashboard = r'''class _DashboardState extends State<Dashboard>{
+  String search='',filter='All';
+  @override Widget build(BuildContext c){
+    final active=widget.habits.where((h)=>h.active).toList();
+    final scheduled=active.where((h)=>h.isScheduled(widget.date)).toList();
+    final done=scheduled.where((h)=>h.isDone(widget.date)).length;
+    final progress=scheduled.isEmpty?0.0:done/scheduled.length;
+    final visible=active.where((h){
+      final q=search.toLowerCase();
+      final tm=q.isEmpty||h.name.toLowerCase().contains(q)||h.tags.any((t)=>t.toLowerCase().contains(q));
+      final fm=filter=='All'||(filter=='Pinned'&&h.pinned)||(filter=='Completed'&&h.isDone(widget.date))||(filter=='Missed'&&h.isScheduled(widget.date)&&!h.isDone(widget.date));
+      return tm&&fm;
+    }).toList()..sort((a,b)=>a.pinned==b.pinned?0:(a.pinned?-1:1));
+    final streak=active.fold<int>(0,(m,h)=>h.currentStreak(widget.date)>m?h.currentStreak(widget.date):m);
+    final mood=widget.moods[Habit.key(widget.date)];
+    return SingleChildScrollView(padding:const EdgeInsets.only(bottom:30),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      PageHeader(title:widget.greeting,subtitle:DateFormat('EEEE, d MMMM').format(widget.date),action:IconButton(onPressed:widget.onTimer,style:IconButton.styleFrom(backgroundColor:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14))),icon:const Icon(Icons.timer_outlined,color:AppColors.blue))),
+      Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:TextField(onChanged:(v)=>setState(()=>search=v),decoration:const InputDecoration(prefixIcon:Icon(Icons.search_rounded),hintText:'Search habits or tags'))),
+      const SizedBox(height:8),_Chips(items:const['All','Pinned','Completed','Missed'],selected:filter,onChanged:(v)=>setState(()=>filter=v)),
+      Padding(padding:const EdgeInsets.fromLTRB(20,12,20,0),child:CardBox(child:Row(children:[
+        TweenAnimationBuilder<double>(tween:Tween(begin:0,end:progress),duration:const Duration(milliseconds:650),curve:Curves.easeOutCubic,builder:(_,v,__)=><SizedBox(width:88,height:88,child:Stack(fit:StackFit.expand,children:[CircularProgressIndicator(value:v,strokeWidth:9,strokeCap:StrokeCap.round,color:AppColors.blue,backgroundColor:AppColors.soft),Center(child:Text('${(progress*100).round()}%',style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800)))]))),
+        const SizedBox(width:18),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text("Today's progress",style:TextStyle(fontSize:17,fontWeight:FontWeight.w700)),const SizedBox(height:4),Text('$done of ${scheduled.length} scheduled',style:const TextStyle(color:AppColors.muted,fontSize:12)),const SizedBox(height:12),ClipRRect(borderRadius:BorderRadius.circular(8),child:LinearProgressIndicator(value:progress,minHeight:7,backgroundColor:AppColors.soft,color:AppColors.blue))]))
+      ]))),
+      Padding(padding:const EdgeInsets.fromLTRB(20,12,20,0),child:Row(children:[Expanded(child:MiniStat(value:'$streak',label:'Current streak')),const SizedBox(width:10),Expanded(child:MiniStat(value:'${active.length}',label:'Active habits'))])),
+      SectionTitle(title:"Today's habits",label:'＋ Add',onAdd:widget.onAdd),
+      if(visible.isEmpty)const Padding(padding:EdgeInsets.all(30),child:Center(child:Text('No matching habits.',style:TextStyle(color:AppColors.muted))))
+      else for(final h in visible)Padding(padding:const EdgeInsets.symmetric(horizontal:20,vertical:4),child:HabitTile(habit:h,date:widget.date,onToggle:()=>widget.onToggle(h,widget.date),onOpen:()=>widget.onOpen(h),onEdit:()=>widget.onEdit(h))),
+      const SectionTitle(title:'Mood'),
+      Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:CardBox(child:Row(mainAxisAlignment:MainAxisAlignment.spaceAround,children:[
+        for(var i=0;i<5;i++) GestureDetector(onTap:()=>widget.onMood(i+1),child:AnimatedContainer(duration:const Duration(milliseconds:180),padding:const EdgeInsets.all(8),decoration:BoxDecoration(color:mood==i+1?AppColors.soft:Colors.transparent,borderRadius:BorderRadius.circular(14)),child:Text(['😫','😕','😐','🙂','😄'][i],style:const TextStyle(fontSize:26))))
+      ])))
+    ]));
+  }
+}'''
+          s = s[:start] + dashboard + s[end:]
+
+          start = s.index('class ActivityHeatmap')
+          end = s.index('\nclass StreakHistory', start)
+          heat = r'''class ActivityHeatmap extends StatelessWidget{
+  final List<Habit>habits; final int year;
+  const ActivityHeatmap({super.key,required this.habits,required this.year});
+  int level(DateTime d){var t=0,x=0;for(final h in habits){if(h.isScheduled(d)){t++;if(h.isDone(d))x++;}}if(t==0||x==0)return 0;if(x==t)return 4;if(x*2>=t)return 3;if(x*4>=t)return 2;return 1;}
+  @override Widget build(BuildContext c){final first=DateTime(year,1,1),monday=first.subtract(Duration(days:first.weekday-1));return SizedBox(height:100,child:SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[for(var w=0;w<53;w++)Padding(padding:const EdgeInsets.only(right:3),child:Column(children:[for(var r=0;r<7;r++)Builder(builder:(_){final d=monday.add(Duration(days:w*7+r)),l=d.year==year?level(d):0;return Container(width:11,height:11,margin:const EdgeInsets.only(bottom:3),decoration:BoxDecoration(color:l==0?AppColors.bg:Color.lerp(AppColors.soft,AppColors.blue,l/4),borderRadius:BorderRadius.circular(3)));})]))])));}
+}'''
+          s = s[:start] + heat + s[end:]
+
+          start = s.index('class _TodoPageState')
+          end = s.index('\nString priorityName', start)
+          todo = r'''class _TodoPageState extends State<TodoPage>{
+  String search='',filter='All';
+  @override Widget build(BuildContext c){
+    final entries=widget.todos.asMap().entries.where((e){final x=e.value,q=search.toLowerCase(),p=(x['priority']as num?)?.toInt()??1;return(q.isEmpty||'${x['title']}'.toLowerCase().contains(q))&&(filter=='All'||filter=='Open'&&x['done']!=true||filter=='Completed'&&x['done']==true||filter=='High'&&p==3);}).toList();
+    final done=widget.todos.where((x)=>x['done']==true).length;
+    return Column(children:[
+      PageHeader(title:'To-Do',subtitle:'$done completed · ${widget.todos.length-done} remaining',action:IconButton(onPressed:widget.onAdd,style:IconButton.styleFrom(backgroundColor:AppColors.blue,foregroundColor:Colors.white),icon:const Icon(Icons.add_rounded))),
+      Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:TextField(onChanged:(v)=>setState(()=>search=v),decoration:const InputDecoration(prefixIcon:Icon(Icons.search_rounded),hintText:'Search tasks'))),
+      const SizedBox(height:8),_Chips(items:const['All','Open','Completed','High'],selected:filter,onChanged:(v)=>setState(()=>filter=v)),
+      Expanded(child:entries.isEmpty?const Center(child:Text('No tasks.',style:TextStyle(color:AppColors.muted))):ListView.builder(padding:const EdgeInsets.fromLTRB(20,12,20,30),itemCount:entries.length,itemBuilder:(c,i){final e=entries[i],x=e.value,high=((x['priority']as num?)?.toInt()??1)==3;return Padding(padding:const EdgeInsets.symmetric(vertical:4),child:Dismissible(key:ValueKey(x['id']),background:Container(decoration:BoxDecoration(color:AppColors.red,borderRadius:BorderRadius.circular(18)),alignment:Alignment.centerRight,padding:const EdgeInsets.only(right:20),child:const Icon(Icons.delete_outline_rounded,color:Colors.white)),onDismissed:(_)=>widget.onDelete(e.key),child:CardBox(padding:const EdgeInsets.symmetric(horizontal:10,vertical:5),child:ListTile(onTap:()=>widget.onEdit(e.key),contentPadding:EdgeInsets.zero,leading:IconButton(onPressed:()=>widget.onToggle(e.key),icon:AnimatedSwitcher(duration:const Duration(milliseconds:180),child:Icon(x['done']==true?Icons.check_circle_rounded:Icons.radio_button_unchecked_rounded,key:ValueKey(x['done']),color:x['done']==true?AppColors.green:AppColors.muted))),title:Text('${x['title']}',style:TextStyle(fontWeight:FontWeight.w700,decoration:x['done']==true?TextDecoration.lineThrough:null)),subtitle:Text('${x['category']??'General'} · ${priorityName(x['priority']as num?)}',style:TextStyle(color:high?AppColors.red:AppColors.muted,fontSize:11,fontWeight:FontWeight.w600)),trailing:high?const Icon(Icons.flag_rounded,size:17,color:AppColors.red):null)));}))
+    ]);
+  }
+}'''
+          s = s[:start] + todo + s[end:]
+
+          s = s.replace("child:TextButton", "child:TextButton")
+          p.write_text(s, encoding='utf-8')
+          PY
+          dart format lib/app.dart
+          flutter pub get
+          flutter analyze
+      - name: Commit repaired UI
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/app.dart
+          git commit -m "Fix HabitUs UI syntax and format [skip ui repair]" || exit 0
+          git push
